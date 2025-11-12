@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>D30 Printer - Web Bluetooth</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link rel="manifest" href="/D30printerPWA/manifest.json" />
+    <title>D30 Printer PWA</title>
     <style>
         body { font-family: sans-serif; }
         textarea { width: 100%; box-sizing: border-box; }
@@ -12,147 +14,33 @@
     </style>
 </head>
 <body>
-    <div class="controls">
-        <h1>D30 Printer PWA (Test)</h1>
-        <button id="connect">Connect to printer</button>
-        <button id="disconnect" class="hidden">Disconnect</button>
-    </div>
-
-    <div id="main" class="content hidden">
-        <p>
-            Label width: <input type="number" id="labelWidth" value="12"> mm,
-            Label height: <input type="number" id="labelHeight" value="30"> mm
-        </p>
-        <hr>
-        <h3>Text</h3>
-        <textarea id="text" rows="5">Hello world</textarea>
-        <p>
-            Font size: <input type="number" id="fontSize" value="20">,
-            Offset X: <input type="number" id="offsetX" value="0">,
-            Offset Y: <input type="number" id="offsetY" value="0">
-        </p>
-        <button id="printText">Print Text</button>
-        <hr>
-        <h3>Image</h3>
-        <input type="file" id="imageFile" accept="image/*">
-        <p>
-            Image width: <input type="number" id="imageWidth" value="100"> px,
-            Dithering: <input type="checkbox" id="dithering">
-        </p>
-        <button id="printImage" disabled>Print Image</button>
-        <p><canvas id="preview"></canvas></p>
-    </div>
-
-    <!-- Loading the library from the CDN, exactly like the original -->
-    <script src="https://cdn.jsdelivr.net/npm/esc-pos-encoder@1.3.0/dist/esc-pos-encoder.js"></script>
-    
-    <!-- Including all JavaScript inline, exactly like the original -->
+    <main>
+        <div class="controls">
+            <h1>D30 Printer PWA</h1>
+            <button id="connect">Connect to printer</button>
+            <button id="disconnect" class="hidden">Disconnect</button>
+        </div>
+        <div id="main" class="content hidden">
+            <p>Label width: <input type="number" id="labelWidth" value="12"> mm, Label height: <input type="number" id="labelHeight" value="30"> mm</p><hr>
+            <h3>Text</h3>
+            <textarea id="text" rows="5">Hello world</textarea>
+            <p>Font size: <input type="number" id="fontSize" value="20">, Offset X: <input type="number" id="offsetX" value="0">, Offset Y: <input type="number" id="offsetY" value="0"></p>
+            <button id="printText">Print Text</button><hr>
+            <h3>Image</h3>
+            <input type="file" id="imageFile" accept="image/*">
+            <p>Image width: <input type="number" id="imageWidth" value="100"> px, Dithering: <input type="checkbox" id="dithering"></p>
+            <button id="printImage" disabled>Print Image</button>
+            <p><canvas id="preview"></canvas></p>
+        </div>
+    </main>
+    <script src="/D30printerPWA/dist/esc-pos-encoder.js"></script>
+    <script src="/D30printerPWA/js/app.js"></script>
     <script>
-        class D30 {
-            async print(width, height, data) {
-                const header = this.getHeader(width, height);
-                const start = [0x1b, 0x40];
-                const end = [0x1d, 0x0c];
-                const result = [...start, ...header, ...data, ...end];
-                return new Uint8Array(result);
-            }
-            getHeader(width, height) {
-                const w = this.numToBytes(width * 8, 2);
-                const h = this.numToBytes(height * 8, 2);
-                return [0x1d, 0x77, w[1], w[0], 0x1d, 0x68, h[1], h[0]];
-            }
-            numToBytes(num, len) {
-                const arr = new Array(len).fill(0);
-                for (let i = 0; i < len; i++) {
-                    arr[i] = num % 256;
-                    num = Math.floor(num / 256);
-                }
-                return arr;
-            }
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/D30printerPWA/sw.js")
+                .then((reg) => console.log("Service worker registered", reg))
+                .catch((err) => console.log("Service worker not registered", err));
         }
-        let bleCharacteristic;
-        const connectButton = document.getElementById('connect');
-        const disconnectButton = document.getElementById('disconnect');
-        const mainContent = document.getElementById('main');
-        const imageFileInput = document.getElementById('imageFile');
-        const printImageButton = document.getElementById('printImage');
-        const previewCanvas = document.getElementById('preview');
-        const connect = async () => {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [0xfee7] }],
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(0xfee7);
-                bleCharacteristic = await service.getCharacteristic(0xfec8);
-                device.addEventListener('gattserverdisconnected', onDisconnected);
-                connectButton.classList.add('hidden');
-                disconnectButton.classList.remove('hidden');
-                mainContent.classList.remove('hidden');
-            } catch (error) {
-                console.error("Connection failed:", error);
-                alert("Connection failed: " + error.message); // Added an alert for direct feedback
-            }
-        };
-        const disconnect = () => {
-            if (bleCharacteristic && bleCharacteristic.service.device.gatt.connected) {
-                bleCharacteristic.service.device.gatt.disconnect();
-            }
-        };
-        const onDisconnected = () => {
-            console.log("Device disconnected");
-            connectButton.classList.remove('hidden');
-            disconnectButton.classList.add('hidden');
-            mainContent.classList.add('hidden');
-        };
-        const send = (data) => {
-            if (!bleCharacteristic) {
-                alert("Not connected to a printer!");
-                return;
-            }
-            return bleCharacteristic.writeValue(data);
-        };
-        const printText = async () => {
-            const labelWidth = parseInt(document.getElementById('labelWidth').value, 10);
-            const labelHeight = parseInt(document.getElementById('labelHeight').value, 10);
-            const text = document.getElementById('text').value;
-            const fontSize = parseInt(document.getElementById('fontSize').value, 10);
-            const offsetX = parseInt(document.getElementById('offsetX').value, 10);
-            const offsetY = parseInt(document.getElementById('offsetY').value, 10);
-            const encoder = new EscPosEncoder();
-            const result = encoder.initialize().text(text, { font: 'arial', width: labelWidth * 8, height: labelHeight * 8, align: 'left', style: 'normal', size: fontSize, x: offsetX, y: offsetY, }).encode();
-            const d30 = new D30();
-            const printData = await d30.print(labelWidth, labelHeight, result);
-            send(printData);
-        };
-        const printImage = async () => {
-            const labelWidth = parseInt(document.getElementById('labelWidth').value, 10);
-            const labelHeight = parseInt(document.getElementById('labelHeight').value, 10);
-            const imageWidth = parseInt(document.getElementById('imageWidth').value, 10);
-            const useDithering = document.getElementById('dithering').checked;
-            const ctx = previewCanvas.getContext('2d');
-            const image = new Image();
-            image.onload = async () => {
-                const ratio = image.height / image.width;
-                previewCanvas.width = imageWidth;
-                previewCanvas.height = imageWidth * ratio;
-                ctx.drawImage(image, 0, 0, previewCanvas.width, previewCanvas.height);
-                const imageData = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-                const encoder = new EscPosEncoder();
-                const result = encoder.initialize().image(imageData, useDithering).encode();
-                const d30 = new D30();
-                const printData = await d30.print(labelWidth, labelHeight, result);
-                send(printData);
-            };
-            image.src = URL.createObjectURL(imageFileInput.files[0]);
-        };
-        connectButton.onclick = connect;
-        disconnectButton.onclick = disconnect;
-        document.getElementById('printText').onclick = printText;
-        printImageButton.onclick = printImage;
-        imageFileInput.onchange = () => {
-            printImageButton.disabled = !imageFileInput.files.length;
-        };
     </script>
 </body>
 </html>
