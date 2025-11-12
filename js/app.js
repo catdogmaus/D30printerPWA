@@ -1,94 +1,124 @@
-// js/app.js — D30 printer PWA (DOMContentLoaded safe version)
+// D30 Printer PWA — Patched app.js
+// Compatible with Brave/Chrome on Android & Desktop
 
-document.addEventListener("DOMContentLoaded", () => {
-  const connectButton = document.getElementById("connect");
-  const disconnectButton = document.getElementById("disconnect");
-  const printButton = document.getElementById("print");
-  const statusEl = document.getElementById("status");
+let device, server, printerCharacteristic;
 
-  let bleCharacteristic = null;
-  let connectedDevice = null;
+const connectButton = document.getElementById("connect");
+const disconnectButton = document.getElementById("disconnect");
+const printButton = document.getElementById("print");
+const statusElement = document.getElementById("status");
 
-  const PRINTER_NAME_PREFIX = "D30";
-  const PRINTER_SERVICE_UUID = "000018f0-0000-1000-8000-00805f9b34fb";
-  const PRINTER_CHARACTERISTIC_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
+function updateStatus(message) {
+  console.log(message);
+  if (statusElement) statusElement.textContent = message;
+}
 
-  function updateStatus(connected, name = "") {
-    statusEl.textContent = connected ? `Connected to ${name}` : "Not connected";
-  }
-
-  function onDisconnected() {
-    console.log("Device disconnected");
-    bleCharacteristic = null;
-    connectedDevice = null;
-    connectButton.classList.remove("hidden");
-    disconnectButton.classList.add("hidden");
-    updateStatus(false);
-  }
-
- async function connect() {
+// Connect to Bluetooth printer
+async function connect() {
   try {
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'D30' }],
-      optionalServices: [0xff00]
+    updateStatus("Requesting Bluetooth device...");
+
+    // ✅ Correct filter: show Phomemo D30 printers and similar
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "D30" }],
+      optionalServices: [0xff00],
     });
 
-    updateStatus(`Connecting to ${device.name}...`);
-    const server = await device.gatt.connect();
-    window.device = device;
-    window.server = server;
+    updateStatus(`Connecting to ${device.name || "device"}...`);
+    server = await device.gatt.connect();
+
+    // Try to get the main printer service
+    const service = await server.getPrimaryService(0xff00);
+    const characteristics = await service.getCharacteristics();
+    printerCharacteristic = characteristics[0];
 
     updateStatus(`Connected to ${device.name}`);
-    document.getElementById('connect').classList.add('hidden');
-    document.getElementById('disconnect').classList.remove('hidden');
+    connectButton.classList.add("hidden");
+    disconnectButton.classList.remove("hidden");
+
+    // Auto handle disconnection
+    device.addEventListener("gattserverdisconnected", onDisconnected);
   } catch (error) {
     console.error(error);
-    updateStatus('Connection failed: ' + error.message);
+    updateStatus("Connection failed: " + error.message);
   }
 }
 
-
-  async function disconnect() {
-    try {
-      if (connectedDevice && connectedDevice.gatt.connected) {
-        console.log("Disconnecting…");
-        connectedDevice.gatt.disconnect();
-      }
-    } catch (err) {
-      console.error("Disconnect error:", err);
-    } finally {
-      onDisconnected();
+// Disconnect the printer
+async function disconnect() {
+  try {
+    if (device && device.gatt.connected) {
+      updateStatus("Disconnecting...");
+      await device.gatt.disconnect();
+      updateStatus("Disconnected");
     }
+  } catch (error) {
+    console.error(error);
+    updateStatus("Error during disconnect: " + error.message);
+  } finally {
+    connectButton.classList.remove("hidden");
+    disconnectButton.classList.add("hidden");
   }
+}
 
-  async function printDemo() {
-    if (!bleCharacteristic) {
-      alert("Please connect to the printer first.");
+// Handle automatic disconnection
+function onDisconnected() {
+  updateStatus("Device disconnected");
+  connectButton.classList.remove("hidden");
+  disconnectButton.classList.add("hidden");
+}
+
+// Print a demo label
+async function printDemo() {
+  try {
+    if (!printerCharacteristic) {
+      updateStatus("Not connected to printer");
       return;
     }
 
-    try {
-      console.log("Sending demo data to printer…");
-      const encoder = new EscPosEncoder();
-      const data = encoder.initialize().text("Hello from D30 PWA!").newline().encode();
-      await bleCharacteristic.writeValue(data);
-      console.log("Print data sent.");
-    } catch (err) {
-      console.error("Print failed:", err);
-      alert("Print failed: " + (err.message || err));
+    updateStatus("Printing demo...");
+
+    // Use EscPosEncoder if available
+    let encoder;
+    if (window.EscPosEncoder) {
+      encoder = new EscPosEncoder();
+      const data = encoder
+        .initialize()
+        .align("center")
+        .line("D30 Printer PWA")
+        .newline()
+        .line("Bluetooth OK ✅")
+        .newline()
+        .line("Hello from Web Bluetooth!")
+        .newline()
+        .cut()
+        .encode();
+      await printerCharacteristic.writeValue(data);
+    } else {
+      // Fallback raw data
+      const text = "D30 Printer PWA\nHello!\n\n";
+      const enc = new TextEncoder();
+      await printerCharacteristic.writeValue(enc.encode(text));
     }
+
+    updateStatus("Print sent successfully");
+  } catch (error) {
+    console.error(error);
+    updateStatus("Print failed: " + error.message);
   }
+}
 
-  connectButton.addEventListener("click", connect);
-  disconnectButton.addEventListener("click", disconnect);
-  printButton.addEventListener("click", printDemo);
+// Event listeners (safe)
+if (connectButton) connectButton.addEventListener("click", connect);
+if (disconnectButton) disconnectButton.addEventListener("click", disconnect);
+if (printButton) printButton.addEventListener("click", printDemo);
 
-  updateStatus(false);
+// Initial status
+updateStatus("Ready to connect");
 
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker
-      .register("/D30printerPWA/sw.js")
-      .then(() => console.log("Service Worker registered."))
-      .catch((err) => console.error("Service Worker registration failed:", err));
-  }
-});
+// Warn user if Bluetooth API missing
+if (!("bluetooth" in navigator)) {
+  alert(
+    "⚠️ Web Bluetooth is not available in this browser.\n\nPlease use Chrome, Edge, or enable Experimental Web Platform features in Brave."
+  );
+}
