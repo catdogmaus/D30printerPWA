@@ -6,5 +6,12 @@
     "orientation": "portrait-primary",
     "display": "standalone",
     "start_url": "/D30printerPWA/",
-    "scope": "/D30printerPWA/"
+    "scope": "/D30printerPWA/",
+    "icons": [
+        {
+            "src": "/D30printerPWA/images/icons/printer-outline.png",
+            "type": "image/png",
+            "sizes": "256x256"
+        }
+    ]
 }
