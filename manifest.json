@@ -1,12 +1,14 @@
 {
     "name": "D30 Printer PWA",
     "short_name": "D30PWA",
-    "start_url": "/D30printerPWA/",
-    "display": "standalone",
     "background_color": "#fdfdfd",
     "theme_color": "#db4938",
     "orientation": "portrait-primary",
+    "display": "standalone",
+
+    "start_url": "/D30printerPWA/",
     "scope": "/D30printerPWA/",
+
     "icons": [
         {
             "src": "/D30printerPWA/images/icons/icon-72x72.png",
