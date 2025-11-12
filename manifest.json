@@ -1,0 +1,22 @@
+
+{
+  "short_name": "D30 Printer",
+  "name": "Phomemo D30 Web Printer",
+  "description": "A web-based application to design and print labels on a Phomemo D30 label printer using Web Bluetooth.",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#111827",
+  "background_color": "#111827"
+}

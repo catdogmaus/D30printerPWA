@@ -1,0 +1,5 @@
+{
+  "name": "Phomemo D30 Web Printer",
+  "description": "A web-based application to design and print labels on a Phomemo D30 label printer using Web Bluetooth. Add text, barcodes, and QR codes to a canvas and print wirelessly.",
+  "requestFramePermissions": []
+}
