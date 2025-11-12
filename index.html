@@ -1,37 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-        <link rel="stylesheet" href="css/style.css" />
-        <!-- MODIFIED: Added repository name to path -->
-        <link rel="manifest" href="/D30printerPWA/manifest.json" />
-        <title>D30 Printer PWA</title>
-    </head>
-    <body>
-        <main>
-            <nav>
-                <h1>D30 Printer PWA</h1>
-                <ul>
-                    <li>Home</li>
-                    <li>About</li>
-                    <li>Blog</li>
-                </ul>
-            </nav>
-            <div class="container"></div>
-        </main>
-        <script src="js/app.js"></script>
-        <script>
-            // MODIFIED: Added repository name to path to register the new sw.js
-            if ("serviceWorker" in navigator) {
-                navigator.serviceWorker
-                    .register("/D30printerPWA/sw.js")
-                    .then((reg) => console.log("service worker registered", reg))
-                    .catch((err) =>
-                        console.log("service worker not registered", err)
-                    );
-            }
-        </script>
-    </body>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="manifest" href="/D30printerPWA/manifest.json" />
+    <title>D30 Printer PWA</title>
+    <style>
+        body { font-family: sans-serif; }
+        textarea { width: 100%; box-sizing: border-box; }
+        .controls, .content { max-width: 600px; margin: 1em auto; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <main>
+        <!-- This UI is copied directly from odensc/phomemo-d30-web-bluetooth/index.html -->
+        <div class="controls">
+            <h1>D30 Printer PWA</h1>
+            <button id="connect">Connect to printer</button>
+            <button id="disconnect" class="hidden">Disconnect</button>
+        </div>
+
+        <div id="main" class="content hidden">
+            <p>
+                Label width: <input type="number" id="labelWidth" value="12"> mm,
+                Label height: <input type="number" id="labelHeight" value="30"> mm
+            </p>
+            <hr>
+            <h3>Text</h3>
+            <textarea id="text" rows="5">Hello world</textarea>
+            <p>
+                Font size: <input type="number" id="fontSize" value="20">,
+                Offset X: <input type="number" id="offsetX" value="0">,
+                Offset Y: <input type="number" id="offsetY" value="0">
+            </p>
+            <button id="printText">Print Text</button>
+            <hr>
+            <h3>Image</h3>
+            <input type="file" id="imageFile" accept="image/*">
+            <p>
+                Image width: <input type="number" id="imageWidth" value="100"> px,
+                Dithering: <input type="checkbox" id="dithering">
+            </p>
+            <button id="printImage" disabled>Print Image</button>
+            <p><canvas id="preview"></canvas></p>
+        </div>
+    </main>
+
+    <!-- Load the library LOCALLY from the dist folder -->
+    <script src="dist/esc-pos-encoder.js"></script>
+
+    <!-- Load your application logic from the existing js/app.js file -->
+    <script src="js/app.js"></script>
+
+    <!-- PWA service worker registration -->
+    <script>
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker
+                .register("/D30printerPWA/sw.js")
+                .then((reg) => console.log("Service worker registered", reg))
+                .catch((err) => console.log("Service worker not registered", err));
+        }
+    </script>
+</body>
 </html>
