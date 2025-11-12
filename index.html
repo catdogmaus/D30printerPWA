@@ -1,43 +1,37 @@
-
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Phomemo D30 Web Printer</title>
-    
-    <link rel="manifest" href="./manifest.json" />
-    <meta name="theme-color" content="#111827" />
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.0/",
-    "react": "https://esm.sh/react@19.2.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.0/"
-  }
-}
-</script>
-</head>
-  <body class="bg-gray-900 text-gray-100">
-    <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js')
-            .then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            })
-            .catch(error => {
-              console.log('ServiceWorker registration failed: ', error);
-            });
-        });
-      }
-    </script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+        <link rel="stylesheet" href="css/style.css" />
+        <!-- MODIFIED: Added repository name to path -->
+        <link rel="manifest" href="/D30printerPWA/manifest.json" />
+        <title>D30 Printer PWA</title>
+    </head>
+    <body>
+        <main>
+            <nav>
+                <h1>D30 Printer PWA</h1>
+                <ul>
+                    <li>Home</li>
+                    <li>About</li>
+                    <li>Blog</li>
+                </ul>
+            </nav>
+            <div class="container"></div>
+        </main>
+        <script src="js/app.js"></script>
+        <script>
+            // MODIFIED: Added repository name to path
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker
+                    .register("/D30printerPWA/sw.js")
+                    .then((reg) => console.log("service worker registered", reg))
+                    .catch((err) =>
+                        console.log("service worker not registered", err)
+                    );
+            }
+        </script>
+    </body>
 </html>
