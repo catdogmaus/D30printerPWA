@@ -1,5 +1,5 @@
+// The ambiguous directory path has been removed from this list.
 const assets = [
-    "/D30printerPWA/",
     "/D30printerPWA/index.html",
     "/D30printerPWA/js/app.js",
     "/D30printerPWA/dist/esc-pos-encoder.js"
