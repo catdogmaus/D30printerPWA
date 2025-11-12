@@ -3,14 +3,20 @@ let cacheName = "D30printerPWA";// 👈 any unique name
 let filesToCache = [
   "/D30printerPWA", // 👈 your repository name , both slash are important
   "service-worker.js",
-  "js/main.js",
-  "js/install-handler.js",
-  "js/settings.js",
-  "css/main.css",
-  "assets/icons/icon.png",
-  "manifest.json"
-  // add your assets here 
-  // ❗️❕donot add config.json here ❗️❕
+  '/',
+  '/index.html',
+  '/index.tsx',
+  '/App.tsx',
+  '/types.ts',
+  '/components/Header.tsx',
+  '/components/ControlsPanel.tsx',
+  '/components/CanvasPreview.tsx',
+  '/components/Icons.tsx',
+  '/services/printerService.ts',
+  '/services/labelGenerator.ts',
+  'https://cdn.tailwindcss.com',
+  'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
+  'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js'
 ];
 
 self.addEventListener("install", function (event) {
