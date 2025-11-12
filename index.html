@@ -4,13 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-
-    <!-- The link to the non-existent CSS file has been REMOVED -->
     <link rel="manifest" href="/D30printerPWA/manifest.json" />
-
     <title>D30 Printer PWA</title>
-    
-    <!-- This is the CORRECT styling, copied from the odensc project -->
     <style>
         body { font-family: sans-serif; }
         textarea { width: 100%; box-sizing: border-box; }
@@ -26,42 +21,30 @@
             <button id="disconnect" class="hidden">Disconnect</button>
         </div>
         <div id="main" class="content hidden">
-            <p>
-                Label width: <input type="number" id="labelWidth" value="12"> mm,
-                Label height: <input type="number" id="labelHeight" value="30"> mm
-            </p>
-            <hr>
+            <p>Label width: <input type="number" id="labelWidth" value="12"> mm, Label height: <input type="number" id="labelHeight" value="30"> mm</p><hr>
             <h3>Text</h3>
             <textarea id="text" rows="5">Hello world</textarea>
-            <p>
-                Font size: <input type="number" id="fontSize" value="20">,
-                Offset X: <input type="number" id="offsetX" value="0">,
-                Offset Y: <input type="number" id="offsetY" value="0">
-            </p>
-            <button id="printText">Print Text</button>
-            <hr>
+            <p>Font size: <input type="number" id="fontSize" value="20">, Offset X: <input type="number" id="offsetX" value="0">, Offset Y: <input type="number" id="offsetY" value="0"></p>
+            <button id="printText">Print Text</button><hr>
             <h3>Image</h3>
             <input type="file" id="imageFile" accept="image/*">
-            <p>
-                Image width: <input type="number" id="imageWidth" value="100"> px,
-                Dithering: <input type="checkbox" id="dithering">
-            </p>
+            <p>Image width: <input type="number" id="imageWidth" value="100"> px, Dithering: <input type="checkbox" id="dithering"></p>
             <button id="printImage" disabled>Print Image</button>
             <p><canvas id="preview"></canvas></p>
         </div>
     </main>
-
-    <!-- The paths to these scripts are correct -->
     <script src="/D30printerPWA/dist/esc-pos-encoder.js"></script>
     <script src="/D30printerPWA/js/app.js"></script>
-
+    
+    <!-- DIAGNOSTIC TEST: Service Worker registration is temporarily disabled -->
+    <!--
     <script>
         if ("serviceWorker" in navigator) {
-            navigator.serviceWorker
-                .register("/D30printerPWA/sw.js")
+            navigator.serviceWorker.register("/D30printerPWA/sw.js")
                 .then((reg) => console.log("Service worker registered", reg))
                 .catch((err) => console.log("Service worker not registered", err));
         }
     </script>
+    -->
 </body>
 </html>
