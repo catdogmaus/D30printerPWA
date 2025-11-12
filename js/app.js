@@ -26,44 +26,27 @@ document.addEventListener("DOMContentLoaded", () => {
     updateStatus(false);
   }
 
-  async function connect() {
-    try {
-      if (!navigator.bluetooth) {
-        alert(
-          "Web Bluetooth is not available in this browser.\n" +
-            "Use Chrome / Edge on Android, macOS or Windows."
-        );
-        return;
-      }
+ async function connect() {
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'D30' }],
+      optionalServices: [0xff00]
+    });
 
-      console.log("Requesting D30 printer…");
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: PRINTER_NAME_PREFIX }],
-        optionalServices: [PRINTER_SERVICE_UUID],
-      });
+    updateStatus(`Connecting to ${device.name}...`);
+    const server = await device.gatt.connect();
+    window.device = device;
+    window.server = server;
 
-      if (!device) {
-        console.warn("No device selected.");
-        return;
-      }
-
-      connectedDevice = device;
-      connectedDevice.addEventListener("gattserverdisconnected", onDisconnected);
-
-      const server = await connectedDevice.gatt.connect();
-      const service = await server.getPrimaryService(PRINTER_SERVICE_UUID);
-      bleCharacteristic = await service.getCharacteristic(PRINTER_CHARACTERISTIC_UUID);
-
-      connectButton.classList.add("hidden");
-      disconnectButton.classList.remove("hidden");
-      updateStatus(true, connectedDevice.name || "D30");
-      console.log("Connected to", connectedDevice.name);
-    } catch (err) {
-      console.error("Bluetooth connect failed:", err);
-      alert("Bluetooth connect failed: " + (err.message || err));
-      disconnect();
-    }
+    updateStatus(`Connected to ${device.name}`);
+    document.getElementById('connect').classList.add('hidden');
+    document.getElementById('disconnect').classList.remove('hidden');
+  } catch (error) {
+    console.error(error);
+    updateStatus('Connection failed: ' + error.message);
   }
+}
+
 
   async function disconnect() {
     try {
