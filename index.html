@@ -1,45 +1,30 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>D30 Printer PWA — Minimal</title>
-  <style>
-    body{font-family:system-ui,Arial;margin:0;background:#071127;color:#eef;padding:18px}
-    .card{max-width:820px;margin:0 auto;background:#071a2b;padding:18px;border-radius:10px}
-    button{background:#22c55e;border:none;padding:8px 12px;border-radius:8px;color:#032018;cursor:pointer}
-    input,textarea,select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:inherit}
-    #preview{background:#fff;color:#000;padding:8px;border-radius:6px;margin-top:10px;min-height:56px}
-    #logs{background:#0b2333;padding:10px;border-radius:6px;margin-top:10px;font-family:monospace;max-height:200px;overflow:auto}
-  </style>
+  <meta charset="UTF-8" />
+  <title>D30 Printer PWA</title>
+  <script src="app.js" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="card">
-    <h1>D30 Printer PWA</h1>
+<body class="bg-gray-100 text-gray-800 p-4">
+  <div class="max-w-md mx-auto bg-white rounded-2xl shadow p-4">
+    <h1 class="text-xl font-bold mb-3">🖨️ D30 Printer</h1>
 
-    <div style="margin-top:12px">
-      <button id="connectBtn">Connect</button>
-      <button id="disconnectBtn">Disconnect</button>
-      <button id="printBtn">Print</button>
+    <div class="space-y-2">
+      <button id="connectBtn" class="bg-blue-600 text-white px-4 py-2 rounded w-full hover:bg-blue-700">
+        Connect
+      </button>
+
+      <input id="textInput" class="w-full border rounded p-2" placeholder="Enter text..." value="Hello D30C">
+
+      <input id="copiesInput" type="number" class="w-full border rounded p-2" value="1" min="1">
+
+      <button id="printBtn" class="bg-green-600 text-white px-4 py-2 rounded w-full hover:bg-green-700">
+        Print
+      </button>
+
+      <textarea id="logBox" class="w-full h-40 border rounded p-2 text-sm bg-gray-50" readonly></textarea>
     </div>
-
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <label>Label W(mm): <input id="labelWidth" type="number" value="40" style="width:80px"></label>
-      <label>Label H(mm): <input id="labelHeight" type="number" value="12" style="width:80px"></label>
-      <label>Font %: <input id="fontSize" type="number" value="80" style="width:80px"></label>
-      <label>Copies: <input id="copies" type="number" value="1" min="1" style="width:80px"></label>
-    </div>
-
-    <div style="margin-top:12px">
-      <label>Text:</label>
-      <textarea id="textInput" rows="3" style="width:100%">Hello from D30C</textarea>
-    </div>
-
-    <div id="preview"></div>
-    <div id="logs">No logs yet.</div>
   </div>
-
-  <!-- IMPORTANT: correct path to your JS -->
-  <script src="/D30printerPWA/js/app.js"></script>
 </body>
 </html>
