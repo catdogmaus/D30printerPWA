@@ -1,4 +1,4 @@
-// app.js — D30C-compatible version
+// app.js — Phomemo D30C compatible
 
 let device = null;
 let server = null;
@@ -24,17 +24,13 @@ async function connect() {
         { namePrefix: "D30" },
         { services: ["0000ff02-0000-1000-8000-00805f9b34fb"] }
       ],
-      optionalServices: [
-        0xff00, 0xff01, 0xff02,
-        "0000ff02-0000-1000-8000-00805f9b34fb"
-      ]
+      optionalServices: [0xff00, 0xff01, 0xff02, "0000ff02-0000-1000-8000-00805f9b34fb"]
     });
 
     log(`Connecting to ${device.name || "Unnamed device"}...`);
     server = await device.gatt.connect();
 
-    // Give Brave/Linux a moment
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 500)); // stability delay
 
     let service;
     try {
@@ -81,13 +77,12 @@ async function handlePrint() {
     const w = canvas.width;
     const h = canvas.height;
 
-    // D30C header (correct order + compression flag)
+    // Original odensc header format
     const header = new Uint8Array([
       0x1F, 0x11, 0x00,
       w & 0xff, (w >> 8) & 0xff,
       h & 0xff, (h >> 8) & 0xff,
-      0x00, // compression flag
-      0x00, 0x00, 0x00
+      0x00, 0x00, 0x00, 0x00
     ]);
 
     const end = new Uint8Array([0x1F, 0x11, 0x02]);
@@ -108,26 +103,26 @@ async function handlePrint() {
 
 // ---------------- CANVAS UTILITIES ----------------
 function textToCanvas(text) {
-  const fontSize = 40; // default; adjustable later
+  const fontSize = 40;
   const padding = 10;
-  const ctxCanvas = document.createElement("canvas");
-  const ctx = ctxCanvas.getContext("2d");
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
   ctx.font = `${fontSize}px sans-serif`;
 
   const textWidth = ctx.measureText(text).width;
-  ctxCanvas.width = textWidth + padding * 2;
-  ctxCanvas.height = fontSize + padding * 2;
+  canvas.width = textWidth + padding * 2;
+  canvas.height = fontSize + padding * 2;
 
   ctx.fillStyle = "white";
-  ctx.fillRect(0, 0, ctxCanvas.width, ctxCanvas.height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "black";
   ctx.textBaseline = "top";
   ctx.fillText(text, padding, padding);
 
-  return ctxCanvas;
+  return canvas;
 }
 
-// --- fixed bit order ---
+// Bottom-up row order (needed for D30C)
 function canvasToBitmap(canvas) {
   const ctx = canvas.getContext("2d");
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -135,11 +130,13 @@ function canvasToBitmap(canvas) {
   const data = new Uint8Array(bytesPerRow * canvas.height);
 
   for (let y = 0; y < canvas.height; y++) {
+    const destY = canvas.height - 1 - y;
     for (let x = 0; x < canvas.width; x++) {
       const i = (y * canvas.width + x) * 4;
       const brightness = imgData.data[i];
-      const bitIndex = 7 - (x & 7); // reverse bits
-      if (brightness < 128) data[y * bytesPerRow + (x >> 3)] |= 1 << bitIndex;
+      const bitIndex = 7 - (x & 7);
+      if (brightness < 128)
+        data[destY * bytesPerRow + (x >> 3)] |= 1 << bitIndex;
     }
   }
   return data;
@@ -147,11 +144,15 @@ function canvasToBitmap(canvas) {
 
 // ---------------- BLUETOOTH SENDER ----------------
 async function sendToPrinter(data) {
-  const CHUNK = 180;
+  const CHUNK = 128; // from odensc
   for (let i = 0; i < data.length; i += CHUNK) {
     const slice = data.slice(i, i + CHUNK);
-    await char.writeValueWithoutResponse(slice);
-    await new Promise(r => setTimeout(r, 30));
+    if (char.properties.write) {
+      await char.writeValue(slice); // with response
+    } else {
+      await char.writeValueWithoutResponse(slice);
+    }
+    await new Promise(r => setTimeout(r, 20));
   }
 }
 
