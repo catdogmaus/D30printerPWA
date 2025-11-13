@@ -184,5 +184,14 @@
 
   <script src="/D30printerPWA/dist/esc-pos-encoder.js"></script>
   <script src="/D30printerPWA/js/app.js"></script>
+  <script>
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", e => {
+    const target = btn.dataset.target;
+    document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
+    document.getElementById(target).classList.remove("hidden");
+  });
+});
+</script>
 </body>
 </html>
