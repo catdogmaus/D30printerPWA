@@ -1,4 +1,4 @@
-// app.js — Phomemo D30C Web Bluetooth PWA
+// app.js — Phomemo D30C Bluetooth printer
 
 let device, server, service, char;
 let logArea;
@@ -13,7 +13,10 @@ document.addEventListener("DOMContentLoaded", () => {
 function log(msg) {
   const t = new Date().toLocaleTimeString();
   console.log(`[${t}] ${msg}`);
-  if (logArea) logArea.value += `[${t}] ${msg}\n`;
+  if (logArea) {
+    logArea.value += `[${t}] ${msg}\n`;
+    logArea.scrollTop = logArea.scrollHeight;
+  }
 }
 
 async function connectPrinter() {
@@ -27,7 +30,6 @@ async function connectPrinter() {
     log(`Connecting to ${device.name}...`);
     server = await device.gatt.connect();
 
-    // Try common Phomemo service UUIDs
     const uuids = [0xff00, 65280, 65282, 65298];
     for (const u of uuids) {
       try {
@@ -72,11 +74,13 @@ async function handlePrint() {
   log("✅ Printing done");
 }
 
+// ---------- Drawing and encoding ----------
+
 function renderTextCanvas(text) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  canvas.width = 384;      // D30 printable width in pixels
-  canvas.height = 96;      // enough height for text
+  canvas.width = 384;     // printable width for D30
+  canvas.height = 96;
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "black";
@@ -87,8 +91,6 @@ function renderTextCanvas(text) {
   return canvas;
 }
 
-// --- PHOMEMO D30C PROTOCOL ENCODER ---
-
 function canvasToD30(canvas) {
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -97,12 +99,12 @@ function canvasToD30(canvas) {
   const bytesPerRow = Math.ceil(w / 8);
   const data = new Uint8Array(bytesPerRow * h);
 
+  // Convert image → 1-bit bitmap
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
-      const brightness = img.data[i]; // red channel
-      // black pixel if darker than mid-gray
-      if (brightness < 128) {
+      const brightness = img.data[i];
+      if (brightness < 128) { // black pixel
         data[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
       }
     }
@@ -113,17 +115,23 @@ function canvasToD30(canvas) {
   const hL = h & 0xff;
   const hH = (h >> 8) & 0xff;
 
+  // ESC @ reset, Phomemo header, then trailer
   const header = new Uint8Array([
+    0x1B, 0x40,                // ESC @ reset
     0x1F, 0x11, 0x00,
     wL, wH, hL, hH,
     0x00, 0x00, 0x00, 0x00
   ]);
+  const trailer = new Uint8Array([0x1F, 0x12, 0x00]); // print + feed
 
-  const packet = new Uint8Array(header.length + data.length);
+  const packet = new Uint8Array(header.length + data.length + trailer.length);
   packet.set(header);
   packet.set(data, header.length);
+  packet.set(trailer, header.length + data.length);
   return packet;
 }
+
+// ---------- Transmission ----------
 
 async function sendToPrinter(data) {
   if (!char) throw new Error("No printer characteristic");
@@ -132,7 +140,7 @@ async function sendToPrinter(data) {
   for (let i = 0; i < data.length; i += CHUNK) {
     const slice = data.slice(i, i + CHUNK);
     if (char.properties.write) {
-      await char.writeValue(slice); // with response
+      await char.writeValue(slice);
     } else {
       await char.writeValueWithoutResponse(slice);
     }
