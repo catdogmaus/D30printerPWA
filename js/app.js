@@ -4,7 +4,7 @@
 let device, server, service, char;
 let logArea, textInput, copiesInput;
 
-// Log helper
+// =============== LOGGING ===============
 function log(msg) {
   const ts = new Date().toLocaleTimeString();
   console.log(`[${ts}] ${msg}`);
@@ -14,7 +14,7 @@ function log(msg) {
   }
 }
 
-// UI initialization
+// =============== UI INIT ===============
 window.addEventListener("DOMContentLoaded", () => {
   logArea = document.getElementById("log");
   textInput = document.getElementById("textInput");
@@ -30,13 +30,12 @@ window.addEventListener("DOMContentLoaded", () => {
   log("App ready. Click Connect to begin.");
 });
 
-// Switch tab view
 function switchTab(tabName) {
   document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
   document.getElementById(tabName)?.classList.remove("hidden");
 }
 
-// Bluetooth connect
+// =============== BLUETOOTH CONNECT ===============
 async function connectPrinter() {
   log("Requesting Bluetooth device...");
   try {
@@ -61,7 +60,6 @@ async function connectPrinter() {
     }
     if (!service) throw new Error("No supported service found");
 
-    // Find characteristic
     const chars = await service.getCharacteristics();
     char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
     if (!char) throw new Error("No writable characteristic found");
@@ -72,7 +70,7 @@ async function connectPrinter() {
   }
 }
 
-// Printing handler
+// =============== PRINT HANDLER ===============
 async function handlePrint() {
   if (!char) {
     log("⚠️ Please connect to the printer first");
@@ -90,7 +88,7 @@ async function handlePrint() {
     for (let i = 0; i < copies; i++) {
       log(`➡️ Sending job ${i + 1}/${copies}`);
       await sendToPrinter(bitmap);
-      await sendToPrinter(new Uint8Array([0x0A])); // line feed
+      await sendToPrinter(new Uint8Array([0x0A])); // feed line
       await new Promise(r => setTimeout(r, 500));
     }
 
@@ -100,10 +98,10 @@ async function handlePrint() {
   }
 }
 
-// Convert text to canvas (for bitmap conversion)
+// =============== TEXT RENDERING ===============
 function textToCanvas(text) {
   const canvas = document.createElement("canvas");
-  canvas.width = 384; // typical D30C width in pixels (48mm)
+  canvas.width = 384; // ~48mm printable width
   canvas.height = 80;
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "white";
@@ -115,24 +113,27 @@ function textToCanvas(text) {
   return canvas;
 }
 
-// Convert canvas to ESC/POS raster bit image command
+// =============== BITMAP → ESC/POS ===============
 function canvasToEscPos(canvas) {
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const bytesPerRow = Math.ceil(canvas.width / 8);
   const data = new Uint8Array(bytesPerRow * canvas.height);
 
+  // --- FIXED PIXEL ENCODING FOR D30C ---
   for (let y = 0; y < canvas.height; y++) {
     for (let x = 0; x < canvas.width; x++) {
       const i = (y * canvas.width + x) * 4;
-      const brightness = img.data[i];
-      // D30C expects black=1
-      if (brightness >= 128)
-        data[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
+      const brightness = img.data[i]; // red channel
+      const byteIndex = y * bytesPerRow + Math.floor(x / 8);
+      // try reversed polarity + standard bit order
+      if (brightness > 128) {
+        data[byteIndex] |= (1 << (7 - (x % 8))); // white pixel marked
+      }
     }
   }
 
-  // ESC/POS "GS v 0" raster bit image command
+  // ESC/POS raster bit image header
   const wL = bytesPerRow & 0xff;
   const wH = (bytesPerRow >> 8) & 0xff;
   const hL = canvas.height & 0xff;
@@ -144,7 +145,7 @@ function canvasToEscPos(canvas) {
   return full;
 }
 
-// Send data to printer in 128-byte chunks
+// =============== CHUNKED WRITE ===============
 async function sendToPrinter(data) {
   const CHUNK = 128;
   for (let i = 0; i < data.length; i += CHUNK) {
