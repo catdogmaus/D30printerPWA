@@ -1,197 +1,132 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>D30 Printer PWA — Clean UI</title>
-  <link rel="manifest" href="/D30printerPWA/manifest.json" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>D30C Printer PWA</title>
+  <link rel="manifest" href="manifest.json" />
+  <script defer src="js/app.js"></script>
   <style>
-    /* Simple, high-contrast styling — no external deps */
-    :root{
-      --bg:#071127; --card:#0b1630; --muted:#9fb0c6; --accent:#2dd4bf; --accent-2:#7dd3fc;
-      --panel:#082033; --text:#e6f7fb; --danger:#ef4444;
+    body {
+      background: #0b1120;
+      color: #f8fafc;
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 0;
     }
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background: linear-gradient(180deg,#041223 0%, #071127 100%);color:var(--text)}
-    .container{max-width:980px;margin:28px auto;padding:18px}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px;padding:18px; box-shadow: 0 8px 30px rgba(2,6,23,0.6);}
-    header{display:flex;gap:12px;align-items:center}
-    h1{margin:0;font-size:20px}
-    .sub{color:var(--muted);font-size:13px;margin-top:6px}
-    .tabs{display:flex;gap:8px;margin-top:14px}
-    .tab{padding:8px 12px;border-radius:10px;cursor:pointer;background:transparent;border:1px solid rgba(255,255,255,0.03); color:var(--muted)}
-    .tab.active{background:var(--accent); color:#052018; font-weight:700}
-    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
-    .btn{background:var(--accent);color:#052018;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
-    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
-    .btn.danger{background:var(--danger);color:white}
-    label{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}
-    input[type="text"], input[type="number"], select { padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:var(--text);min-width:150px }
-    .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start;margin-top:12px}
-    @media(max-width:820px){.grid{grid-template-columns:1fr}}
-    .panel{background:var(--panel);padding:12px;border-radius:10px}
-    #preview-canvas{width:100%;border-radius:6px;background:white;display:block}
-    .small{font-size:12px;color:var(--muted)}
-    .logbox{height:260px;overflow:auto;background:#041324;padding:10px;border-radius:8px;font-family:monospace;font-size:13px;color:#cfeee3}
-    footer{margin-top:12px;color:var(--muted);font-size:12px}
-    .setting-row{display:flex;gap:10px;align-items:center;margin-top:8px}
-    .muted-note{color:var(--muted);font-size:12px;margin-top:8px}
+    header {
+      text-align: center;
+      padding: 1rem;
+      font-size: 1.3rem;
+      font-weight: bold;
+      background: #1e293b;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      padding: 0.5rem;
+      background: #1e293b;
+    }
+    .tab-btn {
+      background: #475569;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+    }
+    .tab-btn:hover { background: #64748b; }
+    .tab-pane { display: none; padding: 1rem; }
+    .tab-pane.active { display: block; }
+    .btn {
+      background: #22c55e;
+      border: none;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      margin: 0.25rem;
+    }
+    .btn:hover { background: #16a34a; }
+    .controls label { display: block; margin-top: 0.5rem; }
+    input, select {
+      padding: 0.4rem;
+      border-radius: 0.3rem;
+      border: 1px solid #334155;
+      width: 100%;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    textarea { width: 100%; min-height: 60px; margin-top: 0.5rem; }
+    #preview {
+      margin-top: 1rem;
+      background: white;
+      color: black;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      text-align: center;
+      min-height: 60px;
+    }
+    #log-output {
+      white-space: pre-wrap;
+      font-family: monospace;
+      background: #1e293b;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-y: auto;
+      max-height: 70vh;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <header>
-        <div>
-          <h1>Phomemo D30 — Printer PWA</h1>
-          <div class="sub">Model D30C (HVIN:D30C) — manual label size & protocol settings — preview included</div>
-        </div>
-      </header>
-
-      <div class="tabs" id="tabs">
-        <div class="tab active" data-tab="print">Print</div>
-        <div class="tab" data-tab="settings">Settings</div>
-        <div class="tab" data-tab="log">Log</div>
-      </div>
-
-      <!-- Print tab -->
-      <div id="tab-print" style="margin-top:12px">
-        <div class="row">
-          <button id="connect" class="btn">Connect</button>
-          <button id="disconnect" class="btn ghost">Disconnect</button>
-          <div id="status" class="small muted-note">Ready</div>
-          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-            <label class="small" style="margin:0">Protocol</label>
-            <select id="protocol-select" style="padding:8px 10px;border-radius:8px;background:white;color:#0b1220;">
-              <option value="auto">Auto</option>
-              <option value="d30">D30-native</option>
-              <option value="escpos">ESC/POS</option>
-              <option value="raw">Raw</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid">
-          <div>
-            <label>Text to print</label>
-            <input id="print-text" type="text" value="Hello from D30!" />
-
-            <div style="display:flex;gap:12px;margin-top:12px;align-items:center">
-              <div style="flex:1">
-                <label>Type</label>
-                <select id="print-type">
-                  <option value="text">Text</option>
-                  <option value="barcode">Barcode</option>
-                  <option value="qrcode">QR Code</option>
-                  <option value="image">Image</option>
-                </select>
-              </div>
-
-              <div style="width:110px">
-                <label>Copies</label>
-                <input id="print-copies" type="number" min="1" value="1" />
-              </div>
-            </div>
-
-            <div id="image-picker" style="margin-top:10px;display:none">
-              <label>Image file</label>
-              <input id="print-image" type="file" accept="image/*"/>
-            </div>
-
-            <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
-              <button id="print" class="btn">Print</button>
-              <button id="preview-btn" class="btn ghost">Preview</button>
-              <button id="reset-settings" class="btn ghost">Reset defaults</button>
-            </div>
-
-            <div class="muted-note">Note: If printing blank labels, try switching protocol in Settings → Protocol (Auto tries several).</div>
-          </div>
-
-          <div>
-            <div class="panel">
-              <label>Label size (mm)</label>
-              <div style="display:flex;gap:8px;align-items:center">
-                <input id="label-width" type="number" min="8" value="40" style="width:90px" /> <span class="small">width (mm)</span>
-                <input id="label-height" type="number" min="4" value="12" style="width:90px;margin-left:8px" /> <span class="small">height (mm)</span>
-              </div>
-
-              <div style="margin-top:12px">
-                <label>Preview</label>
-                <canvas id="preview-canvas" width="384" height="120"></canvas>
-              </div>
-
-              <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-                <button id="download-preview" class="btn ghost">Download Preview</button>
-                <div style="margin-left:auto" class="small">Preview DPI set to 203 by default</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Settings tab -->
-      <div id="tab-settings" style="display:none;margin-top:12px">
-        <div class="panel">
-          <label>Defaults & advanced</label>
-          <div class="setting-row">
-            <div style="flex:1">
-              <label>Default label width (mm)</label>
-              <input id="default-width" type="number" min="8" value="40" />
-            </div>
-            <div style="flex:1">
-              <label>Default label height (mm)</label>
-              <input id="default-height" type="number" min="4" value="12" />
-            </div>
-          </div>
-
-          <div style="margin-top:12px">
-            <label>Default protocol</label>
-            <select id="default-protocol" style="padding:8px 10px;border-radius:8px;">
-              <option value="auto">Auto</option>
-              <option value="d30">D30-native</option>
-              <option value="escpos">ESC/POS</option>
-              <option value="raw">Raw</option>
-            </select>
-          </div>
-
-          <div style="margin-top:12px">
-            <label>Advanced options</label>
-            <div class="small">If you know device-specific packet details you can add advanced tuning here later.</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Log tab -->
-      <div id="tab-log" style="display:none;margin-top:12px">
-        <div class="panel">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-weight:700">Device & Console log</div>
-            <div class="small">Use this to debug char.properties and packet strategies</div>
-          </div>
-          <div id="logbox" class="logbox" style="margin-top:12px">No logs yet.</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="export-log" class="btn ghost">Export log</button>
-            <button id="clear-log" class="btn ghost">Clear log</button>
-            <button id="show-char" class="btn ghost">Show char.properties (console)</button>
-          </div>
-        </div>
-      </div>
-
-      <footer>
-        <div class="small">If print is blank: after connecting click Settings → Default protocol → set to "D30-native" and try again, or paste the console output of <code>char.properties</code> to me and I'll tune framing exactly for your firmware.</div>
-      </footer>
-    </div>
+  <header>Phomemo D30C Printer</header>
+  <div class="tabs">
+    <button class="tab-btn active" data-target="print-tab">Print</button>
+    <button class="tab-btn" data-target="settings-tab">Settings</button>
+    <button class="tab-btn" data-target="log-tab">Logs</button>
   </div>
 
-  <script src="/D30printerPWA/dist/esc-pos-encoder.js"></script>
-  <script src="/D30printerPWA/js/app.js"></script>
+  <div id="print-tab" class="tab-pane active">
+    <div class="controls">
+      <button id="connectBtn" class="btn">Connect</button>
+      <button id="disconnectBtn" class="btn">Disconnect</button>
+
+      <label>Label Width (mm): <input type="number" id="labelWidth" value="40"></label>
+      <label>Label Height (mm): <input type="number" id="labelHeight" value="12"></label>
+      <label>Copies: <input type="number" id="copies" value="1" min="1"></label>
+      <label>Protocol:
+        <select id="protocol">
+          <option value="d30_header">D30 Header</option>
+          <option value="escpos">ESC/POS</option>
+        </select>
+      </label>
+      <label>Text to print:</label>
+      <textarea id="textInput" placeholder="Enter text..."></textarea>
+
+      <button id="printBtn" class="btn">Print</button>
+    </div>
+
+    <div id="preview"></div>
+  </div>
+
+  <div id="settings-tab" class="tab-pane">
+    <p>Future options will go here (default label size, QR scan setup, etc).</p>
+  </div>
+
+  <div id="log-tab" class="tab-pane">
+    <pre id="log-output"></pre>
+  </div>
+
   <script>
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", e => {
-    const target = btn.dataset.target;
-    document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
-    document.getElementById(target).classList.remove("hidden");
-  });
-});
-</script>
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.target).classList.add("active");
+      });
+    });
+  </script>
 </body>
 </html>
