@@ -1,5 +1,3 @@
-// app.js — Phomemo D30C (universal Web Bluetooth printer)
-
 let device, server, service, characteristic;
 let logBox;
 
@@ -59,7 +57,7 @@ async function handlePrint() {
   log(`🖨️ Printing "${text}" (${copies}x)`);
 
   const canvas = renderText(text);
-  const payload = canvasToPhomemo(canvas);
+  const payload = canvasToD30C(canvas);
 
   for (let i = 0; i < copies; i++) {
     log(`➡️ Sending job ${i + 1}/${copies}`);
@@ -78,14 +76,14 @@ function renderText(text) {
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "black";
-  ctx.font = "bold 42px sans-serif";
+  ctx.font = "bold 40px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
   return canvas;
 }
 
-function canvasToPhomemo(canvas) {
+function canvasToD30C(canvas) {
   const ctx = canvas.getContext("2d");
   const { width: w, height: h } = canvas;
   const img = ctx.getImageData(0, 0, w, h).data;
@@ -96,6 +94,7 @@ function canvasToPhomemo(canvas) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       const brightness = img[i];
+      // black = 1 bit
       if (brightness < 128) bitmap[y * rowBytes + (x >> 3)] |= (0x80 >> (x & 7));
     }
   }
@@ -105,6 +104,7 @@ function canvasToPhomemo(canvas) {
 
   const reset = new Uint8Array([0x1B, 0x40]);
   const handshake = new Uint8Array([0x1F, 0x10, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00]);
+  const init = new Uint8Array([0x1F, 0x1B, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   const header = new Uint8Array([
     0x1F, 0x11, 0x00,
     wL, wH, hL, hH,
@@ -112,14 +112,15 @@ function canvasToPhomemo(canvas) {
   ]);
   const footer = new Uint8Array([0x1F, 0x12, 0x00]);
 
-  const full = new Uint8Array(
-    reset.length + handshake.length + header.length + bitmap.length + footer.length
-  );
-  full.set(reset, 0);
-  full.set(handshake, reset.length);
-  full.set(header, reset.length + handshake.length);
-  full.set(bitmap, reset.length + handshake.length + header.length);
-  full.set(footer, reset.length + handshake.length + header.length + bitmap.length);
+  const total = reset.length + handshake.length + init.length + header.length + bitmap.length + footer.length;
+  const full = new Uint8Array(total);
+  let pos = 0;
+  full.set(reset, pos); pos += reset.length;
+  full.set(handshake, pos); pos += handshake.length;
+  full.set(init, pos); pos += init.length;
+  full.set(header, pos); pos += header.length;
+  full.set(bitmap, pos); pos += bitmap.length;
+  full.set(footer, pos);
   return full;
 }
 
