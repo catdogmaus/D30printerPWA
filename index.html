@@ -3,128 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>D30C Printer PWA</title>
-  <link rel="manifest" href="manifest.json" />
-  <script defer src="js/app.js"></script>
-  <style>
-    body {
-      background: #0b1120;
-      color: #f8fafc;
-      font-family: system-ui, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-    header {
-      text-align: center;
-      padding: 1rem;
-      font-size: 1.3rem;
-      font-weight: bold;
-      background: #1e293b;
-    }
-    .tabs {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      padding: 0.5rem;
-      background: #1e293b;
-    }
-    .tab-btn {
-      background: #475569;
-      color: white;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      cursor: pointer;
-    }
-    .tab-btn:hover { background: #64748b; }
-    .tab-pane { display: none; padding: 1rem; }
-    .tab-pane.active { display: block; }
-    .btn {
-      background: #22c55e;
-      border: none;
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      cursor: pointer;
-      margin: 0.25rem;
-    }
-    .btn:hover { background: #16a34a; }
-    .controls label { display: block; margin-top: 0.5rem; }
-    input, select {
-      padding: 0.4rem;
-      border-radius: 0.3rem;
-      border: 1px solid #334155;
-      width: 100%;
-      background: #f8fafc;
-      color: #0f172a;
-    }
-    textarea { width: 100%; min-height: 60px; margin-top: 0.5rem; }
-    #preview {
-      margin-top: 1rem;
-      background: white;
-      color: black;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      text-align: center;
-      min-height: 60px;
-    }
-    #log-output {
-      white-space: pre-wrap;
-      font-family: monospace;
-      background: #1e293b;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      overflow-y: auto;
-      max-height: 70vh;
-    }
-  </style>
+  <title>D30 Printer</title>
+  <script defer src="app.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <header>Phomemo D30C Printer</header>
-  <div class="tabs">
-    <button class="tab-btn active" data-target="print-tab">Print</button>
-    <button class="tab-btn" data-target="settings-tab">Settings</button>
-    <button class="tab-btn" data-target="log-tab">Logs</button>
-  </div>
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center min-h-screen p-4">
+  <h1 class="text-2xl font-bold mb-4">D30 Printer</h1>
 
-  <div id="print-tab" class="tab-pane active">
-    <div class="controls">
-      <button id="connectBtn" class="btn">Connect</button>
-      <button id="disconnectBtn" class="btn">Disconnect</button>
+  <div class="bg-white shadow-md rounded-2xl p-4 w-full max-w-md">
+    <div class="flex flex-col gap-2">
+      <input id="textInput" type="text" placeholder="Enter text to print"
+             class="border rounded-xl p-2 w-full" />
+      <label>Label width (mm): <input id="labelWidth" type="number" value="40" class="border rounded p-1 w-16" /></label>
+      <label>Label height (mm): <input id="labelHeight" type="number" value="12" class="border rounded p-1 w-16" /></label>
+      <label>Text size (%): <input id="fontSize" type="number" value="80" class="border rounded p-1 w-16" /></label>
+      <label>Copies: <input id="copies" type="number" value="1" class="border rounded p-1 w-16" /></label>
 
-      <label>Label Width (mm): <input type="number" id="labelWidth" value="40"></label>
-      <label>Label Height (mm): <input type="number" id="labelHeight" value="12"></label>
-      <label>Copies: <input type="number" id="copies" value="1" min="1"></label>
-      <label>Protocol:
-        <select id="protocol">
-          <option value="d30_header">D30 Header</option>
-          <option value="escpos">ESC/POS</option>
-        </select>
-      </label>
-      <label>Text to print:</label>
-      <textarea id="textInput" placeholder="Enter text..."></textarea>
-
-      <button id="printBtn" class="btn">Print</button>
+      <div class="flex justify-around mt-3">
+        <button id="connectBtn" class="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600">Connect</button>
+        <button id="printBtn" class="bg-green-500 text-white px-4 py-2 rounded-xl hover:bg-green-600">Print</button>
+      </div>
     </div>
 
-    <div id="preview"></div>
-  </div>
+    <div id="preview" class="mt-4 border border-gray-300 rounded-xl bg-gray-50 flex justify-center items-center h-24"></div>
 
-  <div id="settings-tab" class="tab-pane">
-    <p>Future options will go here (default label size, QR scan setup, etc).</p>
-  </div>
+    <div class="flex justify-center gap-2 mt-4">
+      <button class="tab-btn text-sm px-2 py-1 rounded-xl bg-gray-200" data-target="logs">Logs</button>
+      <button class="tab-btn text-sm px-2 py-1 rounded-xl bg-gray-200" data-target="settings">Settings</button>
+    </div>
 
-  <div id="log-tab" class="tab-pane">
-    <pre id="log-output"></pre>
+    <div id="logs" class="tab-pane mt-2 text-xs font-mono bg-gray-50 p-2 rounded-xl h-32 overflow-y-auto"></div>
+    <div id="settings" class="tab-pane mt-2 hidden text-sm">
+      <p>Future options like default label size, default protocol, etc.</p>
+    </div>
   </div>
 
   <script>
     document.querySelectorAll(".tab-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById(btn.dataset.target).classList.add("active");
+        const target = btn.dataset.target;
+        document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
+        document.getElementById(target).classList.remove("hidden");
       });
     });
   </script>
