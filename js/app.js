@@ -1,6 +1,6 @@
 let device, server, service, char;
 
-// Simple logging helper
+// simple logging helper
 function log(msg) {
   const box = document.getElementById("logs");
   if (box) {
@@ -10,7 +10,7 @@ function log(msg) {
   console.log(msg);
 }
 
-// Connect to printer
+// connect to D30 printer
 async function connect() {
   log("Requesting Bluetooth device...");
   try {
@@ -19,42 +19,52 @@ async function connect() {
       return;
     }
 
-    // Broaden discovery for D30C and similar printers
     device = await navigator.bluetooth.requestDevice({
-  filters: [{ services: [0xff00] }],
-  optionalServices: [0xff00, 0xff01, 0xff02]
-});
+      filters: [
+        { namePrefix: "D30" },
+        { services: ["0000ff02-0000-1000-8000-00805f9b34fb"] }
+      ],
+      optionalServices: [
+        0xff00,
+        0xff01,
+        0xff02,
+        "0000ff02-0000-1000-8000-00805f9b34fb"
+      ]
+    });
 
     log(`Connecting to ${device.name || "Unnamed device"}...`);
     server = await device.gatt.connect();
+    await new Promise(r => setTimeout(r, 500)); // Brave delay buffer
 
-    // Try multiple possible services
-    const possibleServices = [0xff00, 0xff01, 0xff02];
-    for (const sid of possibleServices) {
+    // try to get primary service
+    const possible = [
+      "0000ff02-0000-1000-8000-00805f9b34fb",
+      0xff02,
+      0xff00
+    ];
+    for (const sid of possible) {
       try {
         service = await server.getPrimaryService(sid);
-        log(`✅ Found service 0x${sid.toString(16)}`);
+        log(`✅ Found service ${sid}`);
         break;
       } catch (e) {
-        log(`No service 0x${sid.toString(16)}, trying next...`);
+        log(`No service ${sid}`);
       }
     }
 
-    if (!service) throw new Error("No matching printer service found");
+    if (!service) throw new Error("No supported service found");
 
-    // Find writable characteristic
     const chars = await service.getCharacteristics();
     char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
-
     if (!char) throw new Error("No writable characteristic found");
 
     log(`✅ Connected to ${device.name} (${char.uuid})`);
   } catch (e) {
-    log("❌ Connection failed: " + e);
+    log("❌ Connection failed: " + e.message);
   }
 }
 
-// Helper: write in small chunks
+// write helper
 async function writeChunks(characteristic, data) {
   const CHUNK = 180;
   for (let i = 0; i < data.length; i += CHUNK) {
@@ -64,9 +74,9 @@ async function writeChunks(characteristic, data) {
   }
 }
 
-// Convert text to a canvas
+// convert text → canvas
 function textToCanvas(text, widthMm, heightMm, fontPercent) {
-  const dpi = 8; // D30 ~203dpi ≈ 8px/mm
+  const dpi = 8; // ~203dpi
   const w = widthMm * dpi;
   const h = heightMm * dpi;
   const canvas = document.createElement("canvas");
@@ -74,9 +84,9 @@ function textToCanvas(text, widthMm, heightMm, fontPercent) {
   canvas.height = h;
 
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#000000";
+  ctx.fillStyle = "#000";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const fontSize = (h * fontPercent) / 100;
@@ -86,7 +96,7 @@ function textToCanvas(text, widthMm, heightMm, fontPercent) {
   return canvas;
 }
 
-// Convert canvas bitmap to 1-bit image bytes
+// convert canvas → monochrome bitmap
 function canvasToBitmap(canvas) {
   const ctx = canvas.getContext("2d");
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -97,15 +107,19 @@ function canvasToBitmap(canvas) {
     for (let x = 0; x < canvas.width; x++) {
       const i = (y * canvas.width + x) * 4;
       const brightness = imgData.data[i]; // red channel
-      if (brightness < 128) data[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
+      if (brightness < 128)
+        data[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
   return data;
 }
 
-// Print handler
+// print handler
 async function handlePrint() {
-  if (!char) return log("⚠️ Please connect to the printer first");
+  if (!char) {
+    log("⚠️ Please connect to the printer first");
+    return;
+  }
 
   const text = document.getElementById("textInput").value || " ";
   const widthMm = parseInt(document.getElementById("labelWidth").value) || 40;
@@ -115,19 +129,23 @@ async function handlePrint() {
 
   const canvas = textToCanvas(text, widthMm, heightMm, fontPercent);
   const preview = document.getElementById("preview");
-  preview.innerHTML = "";
-  preview.appendChild(canvas);
+  if (preview) {
+    preview.innerHTML = "";
+    preview.appendChild(canvas);
+  }
 
   const bmp = canvasToBitmap(canvas);
   const w = canvas.width;
   const h = canvas.height;
 
+  // proper D30C frame
   const header = new Uint8Array([
-    0x1B, 0x40, 0x1F, 0x11, 0x00,
+    0x1F, 0x11, 0x00,
     w & 0xff, (w >> 8) & 0xff,
-    h & 0xff, (h >> 8) & 0xff
+    h & 0xff, (h >> 8) & 0xff,
+    0x00, 0x00, 0x00, 0x00
   ]);
-  const tail = new Uint8Array([0x1A, 0x0A, 0x0A, 0x04]);
+  const tail = new Uint8Array([0x0A, 0x0A, 0x1A, 0x00]);
 
   try {
     for (let i = 0; i < copies; i++) {
@@ -138,17 +156,14 @@ async function handlePrint() {
     }
     log("✅ Printing done");
   } catch (e) {
-    log("❌ Print error: " + e);
+    log("❌ Print error: " + e.message);
   }
 }
 
-// Wait for DOM before wiring buttons
 window.addEventListener("DOMContentLoaded", () => {
   const connectBtn = document.getElementById("connectBtn");
   const printBtn = document.getElementById("printBtn");
-
   if (connectBtn) connectBtn.addEventListener("click", connect);
   if (printBtn) printBtn.addEventListener("click", handlePrint);
-
   log("App ready. Click Connect to begin.");
 });
