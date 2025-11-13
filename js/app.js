@@ -1,22 +1,21 @@
-// js/app.js — D30 PWA (full-featured, Connect + Print copies + Text/Barcode/QR/Image)
-// Replace your current js/app.js with this file.
-// Requires: /dist/esc-pos-encoder.js loaded before this script (your index.html already does).
+// js/app.js — D30 PWA using original D30 packet framing from odensc/phomemo-d30-web-bluetooth
+// - uses service 0000ff00-0000-1000-8000-00805f9b34fb and characteristic 0000ff02-0000-1000-8000-00805f9b34fb
+// - renders Text / Barcode / QR / Image to a canvas, converts to D30 print bytes and sends in 128-byte packets
 
 document.addEventListener("DOMContentLoaded", () => {
-  // UI elements (index.html must contain elements with these IDs)
+  // ---------- UI ----------
   const connectBtn = document.getElementById("connect");
   const disconnectBtn = document.getElementById("disconnect");
   const printBtn = document.getElementById("print");
   const statusEl = document.getElementById("status");
 
-  // Additional UI for custom text + options
-  // If not present in index.html, create them dynamically below.
-  let inputContainer = document.getElementById("print-controls");
-  if (!inputContainer) {
-    inputContainer = document.createElement("div");
-    inputContainer.id = "print-controls";
-    inputContainer.style.marginTop = "1rem";
-    inputContainer.innerHTML = `
+  // create print controls if missing
+  let controls = document.getElementById("print-controls");
+  if (!controls) {
+    controls = document.createElement("div");
+    controls.id = "print-controls";
+    controls.style.marginTop = "1rem";
+    controls.innerHTML = `
       <div style="margin-bottom:.5rem">
         <label>Text: <input id="print-text" type="text" value="Hello from D30!" style="width:70%"></label>
       </div>
@@ -30,208 +29,327 @@ document.addEventListener("DOMContentLoaded", () => {
           </select>
         </label>
       </div>
-      <div id="image-input-row" style="margin-bottom:.5rem; display:none;">
+      <div id="image-row" style="margin-bottom:.5rem; display:none;">
         <label>Image: <input id="print-image" type="file" accept="image/*"></label>
       </div>
       <div style="margin-bottom:.5rem">
         <label>Copies: <input id="print-copies" type="number" min="1" value="1" style="width:4rem"></label>
       </div>
     `;
-    // insert below the main controls area if exists:
     const main = document.querySelector("main") || document.body;
-    main.appendChild(inputContainer);
+    main.appendChild(controls);
   }
 
   const textInput = document.getElementById("print-text");
   const typeSelect = document.getElementById("print-type");
-  const imageInputRow = document.getElementById("image-input-row");
+  const imageRow = document.getElementById("image-row");
   const imageInput = document.getElementById("print-image");
   const copiesInput = document.getElementById("print-copies");
 
-  // Bluetooth state
-  let device = null;
-  let server = null;
-  let printerCharacteristic = null;
-  let isReady = false;
+  typeSelect.addEventListener("change", () => {
+    imageRow.style.display = typeSelect.value === "image" ? "" : "none";
+  });
 
-  // Candidate service/characteristic UUIDs (covers common D30/Phomemo variants)
-  const CANDIDATE_SERVICES = [
-    "0000ff00-0000-1000-8000-00805f9b34fb", // vendor style
-    0xff00,
-    "000018f0-0000-1000-8000-00805f9b34fb", // earlier D30 style seen in some forks
-  ];
-  const CANDIDATE_CHARACTERISTICS = [
-    "0000ff01-0000-1000-8000-00805f9b34fb", // vendor / typical
-    0xff01,
-    "00002af1-0000-1000-8000-00805f9b34fb", // other reported
-    0x2af1,
-  ];
+  // ---------- D30 constants & helpers (from original printer.js) ----------
+  const PACKET_SIZE_BYTES = 128;
 
-  // Utilities
+  // HEADER_DATA(mmWidthBytes, bytesPerRow)
+  const HEADER_DATA = (mmWidth, bytes) =>
+    new Uint8Array([
+      0x1b,
+      0x40,
+      0x1d,
+      0x76,
+      0x30,
+      0x00,
+      mmWidth % 256,
+      Math.floor(mmWidth / 256),
+      bytes % 256,
+      Math.floor(bytes / 256),
+    ]);
+
+  const END_DATA = new Uint8Array([0x1b, 0x64, 0x00]);
+
   function logStatus(msg) {
     console.log(msg);
     if (statusEl) statusEl.textContent = msg;
   }
 
-  function safeUint8(arr) {
-    return arr instanceof Uint8Array ? arr : new Uint8Array(arr);
+  // pixel decision: returns 0 for black, 1 for white (matching original)
+  function getWhitePixel(canvas, imageData, x, y) {
+    const red = imageData[(canvas.width * y + x) * 4];
+    const green = imageData[(canvas.width * y + x) * 4 + 1];
+    const blue = imageData[(canvas.width * y + x) * 4 + 2];
+    // original: red + green + blue > 0 ? 0 : 1  (0 -> black, 1 -> white)
+    return red + green + blue > 0 ? 0 : 1;
   }
 
-  // Convert an array of bytes or Uint8Array to a BLE-friendly buffer
-  function toBuffer(data) {
-    if (data instanceof ArrayBuffer) return data;
-    if (data instanceof Uint8Array) return data.buffer;
-    return (new Uint8Array(data)).buffer;
+  // convert a canvas to the D30 data format: each 8 horizontal pixels -> 1 byte
+  function getPrintData(canvas) {
+    const ctx = canvas.getContext("2d");
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const bytesPerRow = canvas.width / 8;
+    const data = new Uint8Array(bytesPerRow * canvas.height);
+    let offset = 0;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let k = 0; k < bytesPerRow; k++) {
+        const k8 = k * 8;
+        const b =
+          getWhitePixel(canvas, imageData, k8 + 0, y) * 128 +
+          getWhitePixel(canvas, imageData, k8 + 1, y) * 64 +
+          getWhitePixel(canvas, imageData, k8 + 2, y) * 32 +
+          getWhitePixel(canvas, imageData, k8 + 3, y) * 16 +
+          getWhitePixel(canvas, imageData, k8 + 4, y) * 8 +
+          getWhitePixel(canvas, imageData, k8 + 5, y) * 4 +
+          getWhitePixel(canvas, imageData, k8 + 6, y) * 2 +
+          getWhitePixel(canvas, imageData, k8 + 7, y);
+        data[offset++] = b;
+      }
+    }
+    return data;
   }
 
-  // Try to discover the correct service and characteristic automatically
-  async function findPrinterCharacteristic(gattServer) {
-    for (const svc of CANDIDATE_SERVICES) {
-      try {
-        const service = await gattServer.getPrimaryService(svc);
-        for (const c of CANDIDATE_CHARACTERISTICS) {
-          try {
-            const char = await service.getCharacteristic(c);
-            if (char) {
-              console.log("Found characteristic", c, "on service", svc);
-              return char;
-            }
-          } catch (e) {
-            // ignore and try next characteristic
-          }
+  // send print bytes (header + data + end) in 128-byte packets using characteristic write method
+  async function sendPrintData(characteristic, mmWidth, printBytes) {
+    // printBytes is Uint8Array of the per-row bytes (getPrintData output)
+    const bytesPerRow = mmWidth / 8;
+    const header = HEADER_DATA(mmWidth, bytesPerRow);
+    // final data is header + printBytes
+    const data = new Uint8Array(header.length + printBytes.length);
+    data.set(header, 0);
+    data.set(printBytes, header.length);
+
+    // helper: choose write function
+    const supportsWriteWithResponse = typeof characteristic.writeValueWithResponse === "function";
+    const supportsWriteWithoutResponse = characteristic.properties && characteristic.properties.writeWithoutResponse;
+    const supportsWrite = typeof characteristic.writeValue === "function";
+
+    // We'll attempt writeValueWithResponse first (original used that), then fallback, chunking into PACKET_SIZE_BYTES
+    const writeChunk = async (chunk) => {
+      if (supportsWriteWithResponse) {
+        return characteristic.writeValueWithResponse(chunk);
+      } else if (supportsWrite && !supportsWriteWithoutResponse) {
+        // characteristic.writeValue is likely write with response
+        return characteristic.writeValue(chunk);
+      } else if (supportsWriteWithoutResponse) {
+        // some characteristics only allow writeWithoutResponse
+        if (typeof characteristic.writeValueWithoutResponse === "function") {
+          return characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          // fallback: try writeValue
+          return characteristic.writeValue(chunk);
         }
-        // if none of the candidate characteristics matched on this service, continue
-      } catch (e) {
-        // service not present - try next
+      } else {
+        // as a last resort
+        return characteristic.writeValue(chunk);
       }
+    };
+
+    // send in chunks
+    for (let i = 0; i < data.length; i += PACKET_SIZE_BYTES) {
+      const chunk = data.slice(i, Math.min(i + PACKET_SIZE_BYTES, data.length));
+      await writeChunk(chunk);
+      // tiny pause to give device time to handle stream
+      await new Promise((r) => setTimeout(r, 20));
     }
 
-    // fallback: try to inspect first available service/characteristic (best-effort)
-    try {
-      const services = await gattServer.getPrimaryServices();
-      for (const service of services) {
-        try {
-          const chars = await service.getCharacteristics();
-          if (chars && chars.length > 0) {
-            console.log("Fallback: using first found characteristic", chars[0].uuid, "on service", service.uuid);
-            return chars[0];
-          }
-        } catch (e) {}
-      }
-    } catch (e) {}
-
-    return null;
+    // send END_DATA
+    await writeChunk(END_DATA);
+    console.log("sendPrintData: done");
   }
 
-  // ESC/POS raster image helper (basic)
-  // Scales image to width px (maxPrinterWidth) and converts to 1-bit per pixel (monochrome)
-  async function imageToRaster(imageFile, maxPrinterWidth = 384) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          // scale to max width while keeping aspect ratio
-          const scale = Math.min(1, maxPrinterWidth / img.width);
-          const w = Math.max(1, Math.round(img.width * scale));
-          const h = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, w, h);
-          const imgData = ctx.getImageData(0, 0, w, h);
-          const pixels = imgData.data;
-          // convert to 1-bit per pixel, left-to-right, top-to-bottom
-          const bytesPerLine = Math.ceil(w / 8);
-          const out = new Uint8Array(bytesPerLine * h);
-          for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-              const idx = (y * w + x) * 4;
-              const r = pixels[idx], g = pixels[idx+1], b = pixels[idx+2];
-              // luminance
-              const lum = 0.299*r + 0.587*g + 0.114*b;
-              const bit = lum < 128 ? 1 : 0; // threshold
-              if (bit) {
-                const byteIndex = y * bytesPerLine + (x >> 3);
-                out[byteIndex] |= (0x80 >> (x & 7));
-              }
-            }
-          }
-          // Build ESC/POS raster bit image command (GS v 0)
-          // GS v 0 m xL xH yL yH d...   (m = 0 normal)
-          const xL = bytesPerLine & 0xff;
-          const xH = (bytesPerLine >> 8) & 0xff;
-          const yL = h & 0xff;
-          const yH = (h >> 8) & 0xff;
-          const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
-          const payload = new Uint8Array(header.length + out.length);
-          payload.set(header, 0);
-          payload.set(out, header.length);
-          resolve(payload);
-        };
-        img.onerror = (e) => reject(new Error("Image load error"));
-        img.src = reader.result;
-      };
-      reader.onerror = () => reject(new Error("File read error"));
-      reader.readAsDataURL(imageFile);
+  // Util to draw plain text on a canvas (wraps simple)
+  function renderTextToCanvas(text, labelWidthMm = 40, labelHeightMm = 12, dpi = 203, fontSize = 20) {
+    // Convert mm to pixels using dpi (203 dpi typical thermal) where 1 inch = 25.4 mm
+    const pxPerMm = dpi / 25.4;
+    const widthPx = Math.max(8, Math.floor(labelWidthMm * pxPerMm));
+    const heightPx = Math.max(8, Math.floor(labelHeightMm * pxPerMm));
+    // Ensure width is multiple of 8
+    const widthAligned = Math.ceil(widthPx / 8) * 8;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = widthAligned;
+    canvas.height = heightPx;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "black";
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textBaseline = "top";
+
+    // simple wrap
+    const padding = 4;
+    const maxW = canvas.width - padding * 2;
+    const words = (text || "").split(" ");
+    let line = "";
+    let y = padding;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + (line ? " " : "") + words[n];
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxW && n > 0) {
+        ctx.fillText(line, padding, y);
+        line = words[n];
+        y += fontSize + 2;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, padding, y);
+
+    return canvas;
+  }
+
+  // Render barcode to canvas (simple visual: big text rotated)
+  function renderBarcodeToCanvas(value, labelWidthMm = 40, labelHeightMm = 12, dpi = 203) {
+    // For compatibility produce a human-readable barcode-like block (actual barcode support varies).
+    const pxPerMm = dpi / 25.4;
+    const widthPx = Math.max(8, Math.floor(labelWidthMm * pxPerMm));
+    const heightPx = Math.max(8, Math.floor(labelHeightMm * pxPerMm));
+    const widthAligned = Math.ceil(widthPx / 8) * 8;
+    const canvas = document.createElement("canvas");
+    canvas.width = widthAligned;
+    canvas.height = heightPx;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "black";
+
+    // Draw thick vertical bars from hash of characters (simple barcode look)
+    const barWidth = 2;
+    let x = 4;
+    for (let i = 0; i < value.length && x < canvas.width - 4; i++) {
+      const code = value.charCodeAt(i);
+      const bars = (code % 5) + 1;
+      for (let b = 0; b < bars && x < canvas.width - 4; b++) {
+        ctx.fillRect(x, 4, barWidth, canvas.height - 8);
+        x += barWidth + 1;
+      }
+      x += 2;
+    }
+
+    // Draw human-readable at bottom
+    ctx.font = "14px monospace";
+    ctx.fillText(value.slice(0, 20), 4, canvas.height - 18);
+
+    return canvas;
+  }
+
+  // Render QR code by fetching a QR image (Google Chart API) then drawing to canvas
+  async function renderQrToCanvas(value, labelWidthMm = 40, labelHeightMm = 12, dpi = 203) {
+    // Compose a QR PNG via Google Chart API (data sent via URL)
+    const sizePx = 256;
+    const url = "https://chart.googleapis.com/chart?cht=qr&chs=" + sizePx + "x" + sizePx + "&chl=" + encodeURIComponent(value);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const p = new Promise((res, rej) => {
+      img.onload = () => res();
+      img.onerror = (e) => rej(e);
     });
+    img.src = url;
+    await p;
+
+    // draw scaled to label
+    const pxPerMm = dpi / 25.4;
+    const widthPx = Math.max(8, Math.floor(labelWidthMm * pxPerMm));
+    const heightPx = Math.max(8, Math.floor(labelHeightMm * pxPerMm));
+    const widthAligned = Math.ceil(widthPx / 8) * 8;
+    const canvas = document.createElement("canvas");
+    canvas.width = widthAligned;
+    canvas.height = heightPx;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // center QR
+    const scale = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.9;
+    const iw = img.width * scale;
+    const ih = img.height * scale;
+    ctx.drawImage(img, (canvas.width - iw) / 2, (canvas.height - ih) / 2, iw, ih);
+    return canvas;
   }
 
-  // Write data to characteristic in suitable chunk sizes (Bluetooth LE has MTU limits)
-  async function writeInChunks(characteristic, data) {
-    // data must be Uint8Array
-    const BYTES_PER_CHUNK = 180; // conservative
-    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-    for (let offset = 0; offset < bytes.length; offset += BYTES_PER_CHUNK) {
-      const chunk = bytes.slice(offset, offset + BYTES_PER_CHUNK);
-      await characteristic.writeValue(chunk);
-    }
+  // convert uploaded image file to canvas scaled to the label size
+  async function renderImageFileToCanvas(file, labelWidthMm = 40, labelHeightMm = 12, dpi = 203) {
+    const dataUrl = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = (e) => rej(e);
+      r.readAsDataURL(file);
+    });
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+    });
+
+    const pxPerMm = dpi / 25.4;
+    const widthPx = Math.max(8, Math.floor(labelWidthMm * pxPerMm));
+    const heightPx = Math.max(8, Math.floor(labelHeightMm * pxPerMm));
+    const widthAligned = Math.ceil(widthPx / 8) * 8;
+    const canvas = document.createElement("canvas");
+    canvas.width = widthAligned;
+    canvas.height = heightPx;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // fit image preserving aspect ratio
+    const s = Math.min(canvas.width / img.width, canvas.height / img.height);
+    const dw = img.width * s;
+    const dh = img.height * s;
+    ctx.drawImage(img, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+    return canvas;
   }
 
-  // Connect handler
+  // ---------- Bluetooth / State ----------
+  const SERVICE_UUID = "0000ff00-0000-1000-8000-00805f9b34fb";
+  const CHAR_UUID = "0000ff02-0000-1000-8000-00805f9b34fb";
+
+  let device = null;
+  let server = null;
+  let char = null;
+  let ready = false;
+
+  function onDisconnected() {
+    logStatus("Device disconnected");
+    ready = false;
+    char = null;
+    device = null;
+    connectBtn.classList.remove("hidden");
+    disconnectBtn.classList.add("hidden");
+  }
+
   async function connect() {
     try {
       if (!("bluetooth" in navigator)) {
-        alert("Web Bluetooth not available. Use Chrome/Edge or enable features in Brave.");
+        alert("Web Bluetooth not available. Use Chrome/Edge or enable flags in Brave.");
         return;
       }
-
-      logStatus("Requesting device…");
-
-      // Request using namePrefix; request optional services for later
+      logStatus("Selecting device (chooser) ...");
       device = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: "D30" }],
-        optionalServices: CANDIDATE_SERVICES.concat([]) // pass the list
+        optionalServices: [SERVICE_UUID],
       });
-
       if (!device) {
-        logStatus("No device selected.");
+        logStatus("No device selected");
         return;
       }
-
       device.addEventListener("gattserverdisconnected", onDisconnected);
-
-      logStatus("Connecting to GATT server…");
+      logStatus("Connecting to GATT server ...");
       server = await device.gatt.connect();
-
-      logStatus("Locating printer characteristic…");
-      printerCharacteristic = await findPrinterCharacteristic(server);
-
-      if (!printerCharacteristic) {
-        logStatus("Printer characteristic not found. Connection incomplete.");
-        isReady = false;
-        return;
-      }
-
-      isReady = true;
-      logStatus(`Connected: ${device.name || device.id}`);
+      logStatus("Getting service ...");
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      logStatus("Getting characteristic ...");
+      char = await service.getCharacteristic(CHAR_UUID);
+      // char may support writeWithoutResponse, writeValueWithResponse etc.
+      ready = true;
       connectBtn.classList.add("hidden");
       disconnectBtn.classList.remove("hidden");
-    } catch (error) {
-      console.error("Connect error:", error);
-      logStatus("Connect failed: " + (error && error.message ? error.message : error));
-      isReady = false;
+      logStatus(`Connected: ${device.name || device.id}`);
+    } catch (e) {
+      console.error("Connect error", e);
+      logStatus("Connect failed: " + (e && e.message ? e.message : e));
+      ready = false;
     }
   }
 
@@ -241,178 +359,69 @@ document.addEventListener("DOMContentLoaded", () => {
         device.gatt.disconnect();
       }
     } catch (e) {
-      console.error("Disconnect error", e);
+      console.error(e);
     } finally {
-      isReady = false;
-      printerCharacteristic = null;
-      connectBtn.classList.remove("hidden");
-      disconnectBtn.classList.add("hidden");
-      logStatus("Disconnected");
+      onDisconnected();
     }
   }
 
-  function onDisconnected() {
-    console.log("Device disconnected event");
-    isReady = false;
-    printerCharacteristic = null;
-    connectBtn.classList.remove("hidden");
-    disconnectBtn.classList.add("hidden");
-    logStatus("Device disconnected");
-  }
-
-  // Build ESC/POS bytes for text (uses EscPosEncoder when available)
-  function buildTextBytes(text) {
-    if (window.EscPosEncoder) {
-      const enc = new EscPosEncoder();
-      // using methods commonly present in EscPosEncoder from the repo
-      const data = enc
-        .initialize()
-        .align("center")
-        .line(text)
-        .newline()
-        .cut()
-        .encode();
-      return data;
-    } else {
-      // fallback: simple text + linefeed + cut
-      const enc = new TextEncoder();
-      const textBytes = enc.encode(text + "\n\n");
-      const cut = new Uint8Array([0x1D, 0x56, 0x41, 0x10]); // GS V A n - partial cut
-      const out = new Uint8Array(textBytes.length + cut.length);
-      out.set(textBytes, 0);
-      out.set(cut, textBytes.length);
-      return out;
-    }
-  }
-
-  // Barcode: attempt to use ESC/POS barcode command (EAN13 example). We will encode
-  // the user text as CODE128 if length variable, but many printers support CODE128 via GS k.
-  function buildBarcodeBytes(value) {
-    // Many ESC/POS printers support CODE128 via GS k with m=73 or m=0? Implementation varies.
-    // We'll attempt to use GS k (CODE128) with a basic wrapper. If printer doesn't accept, user will see error.
-    const enc = new TextEncoder();
-    // Center + barcode + newline
-    const cmds = [];
-    // center
-    cmds.push(0x1B, 0x61, 0x01);
-    // Barcode: GS k (Function) - use CODE128 (m=73 or 0x49) — but many implementations prefer specific framing.
-    // For reliability fallback to printing barcode human-readable text if unsupported.
-    try {
-      // Try native ESC/POS print as CODE128: GS k 73 n d1..dn  (not universally supported)
-      const dataBytes = enc.encode(value);
-      const header = new Uint8Array([0x1D, 0x6B, 0x49, dataBytes.length]); // GS k 73 len
-      const out = new Uint8Array(header.length + dataBytes.length + 3);
-      out.set(header, 0);
-      out.set(dataBytes, header.length);
-      // newline + cut
-      out.set([0x0A, 0x0A, 0x1D, 0x56, 0x41, 0x10], header.length + dataBytes.length);
-      return out;
-    } catch (e) {
-      // fallback: text
-      return buildTextBytes(value);
-    }
-  }
-
-  // QR code: many printers support GS ( k or other sequences. We'll attempt a generic approach:
-  function buildQrBytes(value) {
-    // ESC/POS QR sequence (many printers):
-    // [1] Store the data in the symbol storage area:
-    // 1D 28 6B pL pH 49 50 30 [data]
-    // [2] Set error correction and module size (may be optional)
-    // [3] Print the symbol: 1D 28 6B 03 00 49 51 30
-    const enc = new TextEncoder();
-    const data = enc.encode(value);
-    const storeHeader = [0x1D, 0x28, 0x6B];
-    const pL = (data.length + 3) & 0xff;
-    const pH = ((data.length + 3) >> 8) & 0xff;
-    const store = new Uint8Array(3 + 2 + 3 + data.length); // header + pL pH + cmd + data
-    store[0] = 0x1D; store[1] = 0x28; store[2] = 0x6B;
-    store[3] = pL; store[4] = pH;
-    store[5] = 0x31; store[6] = 0x50; store[7] = 0x30;
-    store.set(data, 8);
-    // Print command
-    const printCmd = new Uint8Array([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]);
-    // Compose: store + print + cut
-    const out = new Uint8Array(store.length + printCmd.length + 4);
-    out.set(store, 0);
-    out.set(printCmd, store.length);
-    out.set([0x0A, 0x0A, 0x1D, 0x56], store.length + printCmd.length); // NL NL GS V (cut may be partial)
-    return out;
-  }
-
-  // Main print routine implementing copies and type
+  // ---------- print handling ----------
   async function handlePrint() {
     try {
-      if (!isReady || !printerCharacteristic) {
+      if (!ready || !char) {
         logStatus("Please connect to the printer first.");
         return;
       }
 
-      let count = parseInt(copiesInput.value || "1", 10);
-      if (!isFinite(count) || count < 1) count = 1;
+      let copies = parseInt(copiesInput.value || "1", 10);
+      if (!isFinite(copies) || copies < 1) copies = 1;
 
       const type = (typeSelect.value || "text").toLowerCase();
-
-      let payloads = []; // array of Uint8Array to send in order for one copy
+      let canvas = null;
 
       if (type === "image") {
         const files = imageInput.files;
         if (!files || files.length === 0) {
-          alert("Please select an image file to print.");
+          alert("Please select an image file.");
           return;
         }
-        // convert first file to raster payload
-        const raster = await imageToRaster(files[0]);
-        // add raster + feed + cut for a single copy
-        payloads.push(raster);
-        payloads.push(new Uint8Array([0x0A, 0x0A, 0x1D, 0x56, 0x41, 0x10])); // feed + cut
+        canvas = await renderImageFileToCanvas(files[0]);
       } else if (type === "barcode") {
-        payloads.push(buildBarcodeBytes(textInput.value || ""));
+        canvas = renderBarcodeToCanvas(textInput.value || "");
       } else if (type === "qrcode") {
-        payloads.push(buildQrBytes(textInput.value || ""));
-      } else { // text
-        payloads.push(buildTextBytes(textInput.value || ""));
+        canvas = await renderQrToCanvas(textInput.value || "");
+      } else {
+        // text
+        canvas = renderTextToCanvas(textInput.value || "");
       }
 
-      logStatus(`Printing ${count} copy(ies)...`);
-      // send copies
-      for (let i = 0; i < count; i++) {
-        for (const payload of payloads) {
-          const u8 = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
-          await writeInChunks(printerCharacteristic, u8);
-        }
-        // small pause between copies
-        await new Promise((res) => setTimeout(res, 200));
+      // get D30 bytes and send (copies times)
+      const dataBytes = getPrintData(canvas); // Uint8Array of pixels per original format
+      for (let i = 0; i < copies; i++) {
+        logStatus(`Printing copy ${i + 1} of ${copies} ...`);
+        await sendPrintData(char, canvas.width, dataBytes);
+        // small delay between copies
+        await new Promise((r) => setTimeout(r, 300));
       }
-
-      logStatus("Print sent");
+      logStatus("Printing done");
     } catch (err) {
       console.error("Print error:", err);
       logStatus("Print failed: " + (err && err.message ? err.message : err));
     }
   }
 
-  // Wire up type selection to show/hide image input
-  typeSelect.addEventListener("change", () => {
-    if (typeSelect.value === "image") {
-      imageInputRow.style.display = "";
-    } else {
-      imageInputRow.style.display = "none";
-    }
-  });
-
-  // Wire up buttons
+  // ---------- wire up ----------
   if (connectBtn) connectBtn.addEventListener("click", connect);
   if (disconnectBtn) disconnectBtn.addEventListener("click", disconnect);
   if (printBtn) printBtn.addEventListener("click", handlePrint);
 
-  // initial UI state
   if (disconnectBtn) disconnectBtn.classList.add("hidden");
   logStatus("Ready");
 
-  // Service worker registration (retain existing behavior)
+  // register service worker as before if present
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/D30printerPWA/sw.js")
+    navigator.serviceWorker
+      .register("/D30printerPWA/sw.js")
       .then(() => console.log("Service Worker registered"))
       .catch((e) => console.warn("SW registration failed:", e));
   }
