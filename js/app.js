@@ -21,9 +21,9 @@ async function connect() {
 
     // Broaden discovery for D30C and similar printers
     device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: [0xff00, 0xff01, 0xff02]
-    });
+  filters: [{ services: [0xff00] }],
+  optionalServices: [0xff00, 0xff01, 0xff02]
+});
 
     log(`Connecting to ${device.name || "Unnamed device"}...`);
     server = await device.gatt.connect();
