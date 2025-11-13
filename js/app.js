@@ -231,23 +231,13 @@ document.addEventListener("DOMContentLoaded", () => {
     window.lastStrategy = name;
     logLine("Trying strategy:", name);
     if (name === "d30_header") {
-      const frames = buildD30VariantHeader(mmWidth, heightPx, bytesPerRow, pixelBytes);
-      for (const f of frames) await writeChunks(characteristic, f);
-    } else if (name === "d30_chunked") {
-      const frames = buildD30PerChunkPrefix(pixelBytes, 120);
-      for (const f of frames) await writeChunks(characteristic, f);
-    } else if (name === "d30_lenpref") {
-      const frames = buildD30LengthPrefixed(pixelBytes);
-      for (const f of frames) await writeChunks(characteristic, f);
-    } else if (name === "escpos") {
-      const frames = buildEscPos(pixelBytes, bytesPerRow);
-      for (const f of frames) await writeChunks(characteristic, f);
-    } else if (name === "raw") {
-      const frames = buildRaw(pixelBytes);
-      for (const f of frames) await writeChunks(characteristic, f);
-    } else {
-      throw new Error("Unknown strategy " + name);
-    }
+  // D30C-style framing
+  const init = new Uint8Array([0x1B, 0x40]);              // printer init
+  const start = new Uint8Array([0x1F, 0x11, 0x00]);       // image start
+  const tail = new Uint8Array([0x0A, 0x0A, 0x04]);        // feed & cut
+  const frames = [init, start, pixelBytes, tail];
+  for (const f of frames) await writeChunks(characteristic, f);
+}
   }
 
   // connect/disconnect
