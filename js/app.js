@@ -127,7 +127,7 @@ function canvasToEscPos(canvas) {
       const i = (y * canvas.width + x) * 4;
       const brightness = img.data[i];
       // D30C expects black=1
-      if (brightness < 128)
+      if (brightness >= 128)
         data[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
