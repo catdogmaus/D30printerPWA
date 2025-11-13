@@ -127,7 +127,7 @@ function canvasToEscPos(canvas) {
       const brightness = img.data[i]; // red channel
       const byteIndex = y * bytesPerRow + Math.floor(x / 8);
       // try reversed polarity + standard bit order
-      if (brightness > 128) {
+      if (brightness < 128) {
         data[byteIndex] |= (1 << (7 - (x % 8))); // white pixel marked
       }
     }
