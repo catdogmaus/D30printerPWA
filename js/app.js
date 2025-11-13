@@ -104,7 +104,7 @@ function canvasToD30(canvas) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       const brightness = img.data[i];
-      if (brightness < 128) { // black pixel
+      if (brightness > 128) { // black pixel
         data[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
       }
     }
