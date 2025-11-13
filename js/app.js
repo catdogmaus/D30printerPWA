@@ -2,27 +2,32 @@ let device, server, service, char;
 
 function log(msg) {
   const box = document.getElementById("logs");
+  if (!box) return console.log(msg);
   box.textContent += msg + "\n";
   box.scrollTop = box.scrollHeight;
   console.log(msg);
 }
 
-document.getElementById("connectBtn").addEventListener("click", connect);
-document.getElementById("printBtn").addEventListener("click", handlePrint);
-
 async function connect() {
   log("Requesting Bluetooth device...");
   try {
+    if (!navigator.bluetooth) {
+      log("❌ Web Bluetooth not supported in this browser.");
+      return;
+    }
+
     device = await navigator.bluetooth.requestDevice({
       filters: [{ services: [0xff00] }]
     });
     log(`Connecting to ${device.name}...`);
+
     server = await device.gatt.connect();
     service = await server.getPrimaryService(0xff00);
     char = await service.getCharacteristic(0xff02);
-    log(`Connected to ${device.name}`);
+
+    log(`✅ Connected to ${device.name}`);
   } catch (e) {
-    log("Connection failed: " + e);
+    log("❌ Connection failed: " + e);
   }
 }
 
@@ -62,7 +67,7 @@ function canvasToBitmap(canvas) {
   for (let y = 0; y < canvas.height; y++) {
     for (let x = 0; x < canvas.width; x++) {
       const i = (y * canvas.width + x) * 4;
-      const brightness = imgData.data[i];
+      const brightness = imgData.data[i]; // red channel
       if (brightness < 128) data[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
@@ -95,13 +100,24 @@ async function handlePrint() {
 
   try {
     for (let i = 0; i < copies; i++) {
-      log(`Printing "${text}" (${i + 1}/${copies})`);
+      log(`🖨️ Printing "${text}" (${i + 1}/${copies})`);
       await writeChunks(char, header);
       await writeChunks(char, bmp);
       await writeChunks(char, tail);
     }
-    log("Printing done");
+    log("✅ Printing done");
   } catch (e) {
-    log("Print error: " + e);
+    log("❌ Print error: " + e);
   }
 }
+
+// Wait for DOM
+window.addEventListener("DOMContentLoaded", () => {
+  const connectBtn = document.getElementById("connectBtn");
+  const printBtn = document.getElementById("printBtn");
+
+  if (connectBtn) connectBtn.addEventListener("click", connect);
+  if (printBtn) printBtn.addEventListener("click", handlePrint);
+
+  log("App ready. Click Connect to begin.");
+});
