@@ -1,84 +1,103 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
-    <meta name="theme-color" content="#2b2b2b" />
-    <title>D30 Printer PWA</title>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>D30 Printer PWA — Cleaner UI</title>
+  <link rel="manifest" href="/D30printerPWA/manifest.json" />
+  <style>
+    :root {
+      --bg: #0f1724;
+      --card: #0b1220;
+      --accent: #22c55e;
+      --muted: #9aa4b2;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body { height:100%; margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial; background: linear-gradient(180deg,#071126 0%, #071428 100%); color:#e6eef6; }
+    .wrap { max-width:920px; margin:36px auto; padding:20px; }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; padding:20px; box-shadow: 0 6px 30px rgba(2,6,23,0.6); }
+    h1 { margin:0 0 8px 0; font-size:20px; }
+    .row { display:flex; gap:12px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+    .btn { background:var(--accent); color:#052018; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+    .btn.ghost { background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); }
+    .btn.danger { background:#ef4444; color:white; }
+    label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+    input[type="text"], input[type="number"], select { padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:var(--glass); color:inherit; min-width:180px; }
+    .col { display:flex; flex-direction:column; gap:6px; }
+    .right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    #status { padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.02); color:var(--muted); font-weight:600; }
+    #log { margin-top:12px; font-family:monospace; font-size:12px; max-height:220px; overflow:auto; background:rgba(0,0,0,0.15); padding:10px; border-radius:8px; color:#cfeee3; }
+    .small { font-size:12px; color:var(--muted); }
+    .controls-grid { display:grid; grid-template-columns: 1fr 240px; gap:16px; align-items:start; }
+    @media (max-width:700px) { .controls-grid { grid-template-columns:1fr; } .right{ margin-left:0; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Phomemo D30 — Printer PWA</h1>
+      <div class="small">Model: D30C support (auto-detect). Use Chrome/Edge or Brave with experimental features enabled.</div>
 
-    <!-- PWA manifest -->
-    <link rel="manifest" href="/D30printerPWA/manifest.json" />
-    <link rel="icon" href="/D30printerPWA/icons/icon-192.png" />
+      <div class="row" style="margin-top:16px;">
+        <button id="connect" class="btn">Connect</button>
+        <button id="disconnect" class="btn ghost">Disconnect</button>
+        <div id="status">Ready</div>
+        <div class="right small">Protocol:
+          <select id="protocol-select" style="margin-left:8px; padding:8px 10px; border-radius:8px;">
+            <option value="auto">Auto (try multiple)</option>
+            <option value="d30">D30-native</option>
+            <option value="escpos">ESC/POS raster</option>
+            <option value="raw">Raw chunk send</option>
+          </select>
+        </div>
+      </div>
 
-    <!-- Basic styling -->
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        background: #f9f9f9;
-        color: #222;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 100vh;
-        margin: 0;
-        padding: 2rem;
-      }
+      <div class="controls-grid">
+        <div>
+          <label>Text to print</label>
+          <input id="print-text" type="text" value="Hello from D30!" />
 
-      h1 {
-        margin-bottom: 1rem;
-      }
+          <div style="display:flex; gap:12px; margin-top:12px;">
+            <div class="col">
+              <label>Type</label>
+              <select id="print-type">
+                <option value="text">Text</option>
+                <option value="barcode">Barcode</option>
+                <option value="qrcode">QR Code</option>
+                <option value="image">Image</option>
+              </select>
+            </div>
 
-      main {
-        text-align: center;
-        width: 100%;
-        max-width: 480px;
-      }
+            <div class="col">
+              <label>Copies</label>
+              <input id="print-copies" type="number" min="1" value="1" />
+            </div>
 
-      button {
-        font-size: 1rem;
-        padding: 0.6rem 1.2rem;
-        margin: 0.5rem;
-        border-radius: 8px;
-        border: none;
-        background-color: #007bff;
-        color: #fff;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
+            <div class="col" id="image-col" style="display:none;">
+              <label>Image</label>
+              <input id="print-image" type="file" accept="image/*" />
+            </div>
+          </div>
 
-      button:hover {
-        background-color: #0056b3;
-      }
+          <div class="row" style="margin-top:16px;">
+            <button id="print" class="btn">Print</button>
+            <button id="clear-log" class="btn ghost">Clear Log</button>
+            <div class="small" style="margin-left:8px;">(Connect → choose device → Print)</div>
+          </div>
+        </div>
 
-      button.hidden {
-        display: none;
-      }
+        <div>
+          <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Console log (for debugging)</div>
+          <div id="log">No logs yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-      p#status {
-        margin-top: 1.5rem;
-        font-weight: bold;
-      }
-    </style>
-  </head>
+  <!-- keep esc-pos-encoder if present in repo (no harm) -->
+  <script src="/D30printerPWA/dist/esc-pos-encoder.js"></script>
 
-  <body>
-    <h1>D30 Printer PWA</h1>
-
-    <main>
-      <button id="connect">Connect</button>
-      <button id="disconnect" class="hidden">Disconnect</button>
-      <button id="print">Print</button>
-      <p id="status">Not connected</p>
-    </main>
-
-    <!-- EscPos encoder (from repo) -->
-    <script src="/D30printerPWA/dist/esc-pos-encoder.js"></script>
-
-    <!-- Main JS logic -->
-    <script src="/D30printerPWA/js/app.js"></script>
-  </body>
+  <!-- Main app JS (drop-in) -->
+  <script src="/D30printerPWA/js/app.js"></script>
+</body>
 </html>
