@@ -1,157 +1,138 @@
-// app.js — D30C Bluetooth Printer PWA
-// Works with Phomemo D30C (ESC/POS-like firmware)
+// app.js — Phomemo D30C Web Bluetooth PWA
 
 let device, server, service, char;
-let logArea, textInput, copiesInput;
+let logArea;
 
-// =============== LOGGING ===============
-function log(msg) {
-  const ts = new Date().toLocaleTimeString();
-  console.log(`[${ts}] ${msg}`);
-  if (logArea) {
-    logArea.value += `[${ts}] ${msg}\n`;
-    logArea.scrollTop = logArea.scrollHeight;
-  }
-}
-
-// =============== UI INIT ===============
-window.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", () => {
   logArea = document.getElementById("log");
-  textInput = document.getElementById("textInput");
-  copiesInput = document.getElementById("copiesInput");
-
-  document.getElementById("connectBtn")?.addEventListener("click", connectPrinter);
-  document.getElementById("printBtn")?.addEventListener("click", handlePrint);
-
-  document.querySelectorAll("[data-tab]").forEach(btn =>
-    btn.addEventListener("click", e => switchTab(e.target.dataset.tab))
-  );
-
+  document.getElementById("connect").addEventListener("click", connectPrinter);
+  document.getElementById("print").addEventListener("click", handlePrint);
   log("App ready. Click Connect to begin.");
 });
 
-function switchTab(tabName) {
-  document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
-  document.getElementById(tabName)?.classList.remove("hidden");
+function log(msg) {
+  const t = new Date().toLocaleTimeString();
+  console.log(`[${t}] ${msg}`);
+  if (logArea) logArea.value += `[${t}] ${msg}\n`;
 }
 
-// =============== BLUETOOTH CONNECT ===============
 async function connectPrinter() {
-  log("Requesting Bluetooth device...");
   try {
+    log("Requesting Bluetooth device...");
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "D" }],
-      optionalServices: [0xff00, 0xff02, 0xff12]
+      filters: [{ namePrefix: "D30" }],
+      optionalServices: [0xff00, 0xff02, 65280, 65282, 65298]
     });
 
-    log(`Connecting to ${device.name || "device"}...`);
-    device.addEventListener("gattserverdisconnected", () => log("⚠️ Disconnected"));
-
+    log(`Connecting to ${device.name}...`);
     server = await device.gatt.connect();
-    const serviceCandidates = [0xff02, 0xff12, 0xff00];
-    for (const svc of serviceCandidates) {
+
+    // Try common Phomemo service UUIDs
+    const uuids = [0xff00, 65280, 65282, 65298];
+    for (const u of uuids) {
       try {
-        service = await server.getPrimaryService(svc);
-        log(`✅ Found service ${svc}`);
-        break;
-      } catch (err) {
-        log(`No service ${svc}`);
+        service = await server.getPrimaryService(u);
+        const chars = await service.getCharacteristics();
+        for (const c of chars) {
+          if (c.properties.write || c.properties.writeWithoutResponse) {
+            char = c;
+            log(`✅ Connected to ${device.name} (${char.uuid})`);
+            return;
+          }
+        }
+      } catch (e) {
+        log(`No service ${u}`);
       }
     }
-    if (!service) throw new Error("No supported service found");
-
-    const chars = await service.getCharacteristics();
-    char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
-    if (!char) throw new Error("No writable characteristic found");
-
-    log(`✅ Connected to ${device.name} (${char.uuid})`);
-  } catch (err) {
-    log("❌ Connection failed: " + err.message);
+    log("❌ No suitable write characteristic found.");
+  } catch (e) {
+    log("Connection failed: " + e);
   }
 }
 
-// =============== PRINT HANDLER ===============
 async function handlePrint() {
   if (!char) {
-    log("⚠️ Please connect to the printer first");
+    log("Please connect to the printer first");
     return;
   }
 
-  const text = textInput?.value?.trim() || "Hello D30C";
-  const copies = Math.max(1, parseInt(copiesInput?.value) || 1);
+  const text = document.getElementById("text").value || "Hello D30C";
+  const copies = parseInt(document.getElementById("copies").value) || 1;
+
   log(`🖨️ Printing "${text}" (${copies}x)`);
 
-  try {
-    const canvas = textToCanvas(text);
-    const bitmap = canvasToEscPos(canvas);
+  const canvas = renderTextCanvas(text);
+  const bitmap = canvasToD30(canvas);
 
-    for (let i = 0; i < copies; i++) {
-      log(`➡️ Sending job ${i + 1}/${copies}`);
-      await sendToPrinter(bitmap);
-      await sendToPrinter(new Uint8Array([0x0A])); // feed line
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    log("✅ Printing done");
-  } catch (err) {
-    log("❌ Print failed: " + err.message);
+  for (let i = 0; i < copies; i++) {
+    log(`➡️ Sending job ${i + 1}/${copies}`);
+    await sendToPrinter(bitmap);
   }
+
+  log("✅ Printing done");
 }
 
-// =============== TEXT RENDERING ===============
-function textToCanvas(text) {
+function renderTextCanvas(text) {
   const canvas = document.createElement("canvas");
-  canvas.width = 384; // ~48mm printable width
-  canvas.height = 80;
   const ctx = canvas.getContext("2d");
+  canvas.width = 384;      // D30 printable width in pixels
+  canvas.height = 96;      // enough height for text
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "black";
-  ctx.font = "36px sans-serif";
-  const textWidth = ctx.measureText(text).width;
-  ctx.fillText(text, (canvas.width - textWidth) / 2, 50);
+  ctx.font = "bold 40px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
   return canvas;
 }
 
-// =============== BITMAP → ESC/POS ===============
-function canvasToEscPos(canvas) {
+// --- PHOMEMO D30C PROTOCOL ENCODER ---
+
+function canvasToD30(canvas) {
   const ctx = canvas.getContext("2d");
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const bytesPerRow = Math.ceil(canvas.width / 8);
-  const data = new Uint8Array(bytesPerRow * canvas.height);
+  const w = canvas.width;
+  const h = canvas.height;
+  const bytesPerRow = Math.ceil(w / 8);
+  const data = new Uint8Array(bytesPerRow * h);
 
-  // --- FIXED PIXEL ENCODING FOR D30C ---
-  for (let y = 0; y < canvas.height; y++) {
-    for (let x = 0; x < canvas.width; x++) {
-      const i = (y * canvas.width + x) * 4;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
       const brightness = img.data[i]; // red channel
-      const byteIndex = y * bytesPerRow + Math.floor(x / 8);
-      // try reversed polarity + standard bit order
+      // black pixel if darker than mid-gray
       if (brightness < 128) {
-        data[byteIndex] |= (1 << (7 - (x % 8))); // white pixel marked
+        data[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
       }
     }
   }
 
-  // ESC/POS raster bit image header
-  const wL = bytesPerRow & 0xff;
-  const wH = (bytesPerRow >> 8) & 0xff;
-  const hL = canvas.height & 0xff;
-  const hH = (canvas.height >> 8) & 0xff;
-  const header = new Uint8Array([0x1B, 0x40, 0x1D, 0x76, 0x30, 0x00, wL, wH, hL, hH]);
-  const full = new Uint8Array(header.length + data.length);
-  full.set(header);
-  full.set(data, header.length);
-  return full;
+  const wL = w & 0xff;
+  const wH = (w >> 8) & 0xff;
+  const hL = h & 0xff;
+  const hH = (h >> 8) & 0xff;
+
+  const header = new Uint8Array([
+    0x1F, 0x11, 0x00,
+    wL, wH, hL, hH,
+    0x00, 0x00, 0x00, 0x00
+  ]);
+
+  const packet = new Uint8Array(header.length + data.length);
+  packet.set(header);
+  packet.set(data, header.length);
+  return packet;
 }
 
-// =============== CHUNKED WRITE ===============
 async function sendToPrinter(data) {
+  if (!char) throw new Error("No printer characteristic");
+
   const CHUNK = 128;
   for (let i = 0; i < data.length; i += CHUNK) {
     const slice = data.slice(i, i + CHUNK);
     if (char.properties.write) {
-      await char.writeValue(slice);
+      await char.writeValue(slice); // with response
     } else {
       await char.writeValueWithoutResponse(slice);
     }
