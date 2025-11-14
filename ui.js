@@ -1,5 +1,15 @@
 // ui.js
-import { printer, connect, disconnect, renderTextCanvas, renderImageCanvas, renderBarcodeCanvas, renderQRCanvas, printCanvasObject, detectLabel } from './printer.js';
+import {
+  printer,
+  connect,
+  disconnect,
+  renderTextCanvas,
+  renderImageCanvas,
+  renderBarcodeCanvas,
+  renderQRCanvas,
+  printCanvasObject,
+  detectLabel
+} from './printer.js';
 
 // helper
 function $ (id) { return document.getElementById(id); }
