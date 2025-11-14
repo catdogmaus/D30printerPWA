@@ -11,12 +11,11 @@ import {
   detectLabel
 } from './printer.js';
 
-// helper
 function $ (id) { return document.getElementById(id); }
 let previewTimer = null;
 const PREVIEW_DEBOUNCE_MS = 250;
 
-// set up tabs & preview
+// switch tabs and update preview
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   const el = $(name);
@@ -24,27 +23,36 @@ function switchTab(name) {
   document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('bg-indigo-100','text-indigo-700'));
   const active = document.querySelector(`[data-tab="${name}"]`);
   if (active) active.classList.add('bg-indigo-100','text-indigo-700');
-  updatePreview();
+  updatePreviewDebounced();
 }
 
-function placePreviewCanvas(canvas) {
+// place preview canvas scaled but preserving aspect ratio
+function placePreviewCanvas(sourceCanvas) {
   const wrap = $('previewCanvasWrap');
   wrap.innerHTML = '';
-  // compute scale to fit within box while preserving aspect ratio and not exceeding max dims
-  const maxW = Math.min(420, window.innerWidth - 48);
-  const maxH = 200;
-  const scale = Math.min(maxW / canvas.width, maxH / canvas.height, 1);
+
+  // compute dynamic max height based on aspect ratio
+  const aspect = sourceCanvas.width / sourceCanvas.height; // width/height
+  let maxH = 250; // base
+  if (aspect < 0.2) maxH = 350; // very long labels -> bigger preview
+
+  // compute max available width (bounded)
+  const maxW = Math.min(680, window.innerWidth * 0.9);
+
+  const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
   const cv = document.createElement('canvas');
-  cv.width = Math.round(canvas.width * scale);
-  cv.height = Math.round(canvas.height * scale);
+  cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+  cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.drawImage(canvas, 0, 0, cv.width, cv.height);
+  ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
+
+  // center and append
   wrap.appendChild(cv);
 }
 
-// preview update logic (debounced)
+// debounced preview update
 function updatePreviewDebounced() {
   if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, PREVIEW_DEBOUNCE_MS);
@@ -57,6 +65,7 @@ async function updatePreview() {
   const labelW = Number($('labelWidth').value || 12);
   const labelH = Number($('labelLength').value || 40);
   const dpi = printer.settings.dpiPerMM || 8;
+  const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
 
   try {
     if (active.id === 'tab-text') {
@@ -64,7 +73,7 @@ async function updatePreview() {
       const fontSize = Number($('fontSize').value || 36);
       const align = $('alignment').value || 'center';
       const invert = $('invertInput').checked;
-      const obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi);
+      const obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi, fontFamily);
       placePreviewCanvas(obj.canvas);
     } else if (active.id === 'tab-image') {
       const preview = $('imagePreview');
@@ -79,8 +88,7 @@ async function updatePreview() {
         };
         img.src = dataURL;
       } else {
-        $('imagePreview').innerHTML = '<div class="text-sm text-gray-500">No image uploaded</div>';
-        $('previewCanvasWrap').innerHTML = '';
+        $('previewCanvasWrap').innerHTML = '<div class="text-sm text-gray-500">No image uploaded</div>';
       }
     } else if (active.id === 'tab-barcode') {
       const val = $('barcodeInput').value;
@@ -94,14 +102,14 @@ async function updatePreview() {
       const obj = await renderQRCanvas(val, size, labelW, labelH, dpi);
       placePreviewCanvas(obj.canvas);
     } else {
-      // settings or logs: keep last preview
+      // settings/logs: leave preview as is
     }
   } catch (e) {
     console.warn('Preview error', e);
   }
 }
 
-// wire UI to actions
+// UI wiring
 async function setup() {
   // tabs
   document.querySelectorAll('.tab-pill').forEach(p => {
@@ -109,15 +117,16 @@ async function setup() {
   });
   switchTab('tab-text');
 
-  // connect
+  // connect/disconnect
   $('connectBtn').addEventListener('click', async () => {
     if (!printer.connected) {
       await connect();
     } else {
       await disconnect();
     }
+    updatePreviewDebounced();
   });
-  $('disconnectBtn')?.addEventListener('click', async () => await disconnect());
+  $('disconnectBtn')?.addEventListener('click', async () => { await disconnect(); updatePreviewDebounced(); });
 
   // font controls
   $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Math.min(200, Number($('fontSize').value || 36) + 2); updatePreviewDebounced();});
@@ -127,7 +136,6 @@ async function setup() {
   $('alignment').addEventListener('change', ()=> updatePreviewDebounced());
   $('invertInput').addEventListener('change', ()=> updatePreviewDebounced());
   $('textInput').addEventListener('input', ()=> updatePreviewDebounced());
-  $('copiesInput')?.addEventListener('input', ()=> {}); // no preview change
 
   // barcode/qr inputs
   $('barcodeInput').addEventListener('input', ()=> updatePreviewDebounced());
@@ -139,7 +147,7 @@ async function setup() {
   // image upload
   $('imageFile')?.addEventListener('change', (ev) => {
     const f = ev.target.files && ev.target.files[0];
-    if (!f) { updatePreview(); return; }
+    if (!f) { updatePreviewDebounced(); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
@@ -156,7 +164,6 @@ async function setup() {
         const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,c.width,c.height);
         const ratio = Math.min(c.width / img.width, c.height / img.height);
         ctx.drawImage(img, (c.width - img.width*ratio)/2, (c.height - img.height*ratio)/2, img.width*ratio, img.height*ratio);
-        // store dataURL for preview & printing
         $('imagePreview').dataset.canvas = c.toDataURL();
         $('imagePreview').innerHTML = ''; $('imagePreview').appendChild(c);
         updatePreviewDebounced();
@@ -166,7 +173,7 @@ async function setup() {
     reader.readAsDataURL(f);
   });
 
-  // image threshold/invert
+  // image controls
   $('imageThreshold')?.addEventListener('input', ()=> updatePreviewDebounced());
   $('imageInvert')?.addEventListener('change', ()=> updatePreviewDebounced());
 
@@ -186,6 +193,11 @@ async function setup() {
   $('labelLength').addEventListener('input', ()=> updatePreviewDebounced());
   $('protocolSelect').addEventListener('change', ()=> localStorage.setItem('protocol', $('protocolSelect').value));
 
+  // font family setting
+  const savedFont = localStorage.getItem('fontFamily') || 'sans-serif';
+  $('fontFamily').value = savedFont;
+  $('fontFamily').addEventListener('change', ()=> { localStorage.setItem('fontFamily', $('fontFamily').value); updatePreviewDebounced(); });
+
   // preview for barcode & qr at start
   $('barcodeInput').dispatchEvent(new Event('input'));
   $('qrInput').dispatchEvent(new Event('input'));
@@ -198,9 +210,10 @@ async function setup() {
       const labelH = Number($('labelLength').value || 40);
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value || 1);
+      const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
       let obj;
       if (active.id === 'tab-text') {
-        obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi);
+        obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, fontFamily);
       } else if (active.id === 'tab-image') {
         const dataURL = $('imagePreview').dataset.canvas;
         if (!dataURL) return alert('Please upload an image first');
@@ -222,7 +235,7 @@ async function setup() {
     }
   });
 
-  // save simple prefs
+  // simple prefs
   $('fontSize').value = localStorage.getItem('fontSize') || 40;
   $('alignment').value = localStorage.getItem('alignment') || 'center';
   $('invertInput').checked = localStorage.getItem('invert') === 'true' || false;
@@ -230,7 +243,7 @@ async function setup() {
   $('alignment').addEventListener('change', ()=> localStorage.setItem('alignment', $('alignment').value));
   $('invertInput').addEventListener('change', ()=> localStorage.setItem('invert', $('invertInput').checked));
 
-  // update preview initially
+  // initial preview
   updatePreviewDebounced();
 }
 
