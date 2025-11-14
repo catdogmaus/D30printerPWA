@@ -8,7 +8,8 @@ export const printer = {
     labelWidthMM: 12,
     labelLengthMM: 40,
     dpiPerMM: 8,
-    protocol: "phomemo_raw"
+    protocol: "phomemo_raw",
+    fontFamily: "sans-serif"
   },
   logs: []
 };
@@ -88,7 +89,7 @@ function updateConnUI(connected) {
 }
 
 // Render text canvas: text is rotated INSIDE the canvas so raster orientation remains native
-export function renderTextCanvas(text, fontSize = 40, alignment = 'center', invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
+export function renderTextCanvas(text, fontSize = 40, alignment = 'center', invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8, fontFamily = 'sans-serif') {
   const widthPx = Math.round(labelWidthMM * dpi);
   const heightPx = Math.round(labelLengthMM * dpi);
   const bytesPerRow = Math.ceil(widthPx / 8);
@@ -107,7 +108,7 @@ export function renderTextCanvas(text, fontSize = 40, alignment = 'center', inve
   ctx.rotate(-Math.PI / 2);
 
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
-  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
   ctx.textAlign = alignment;
   ctx.textBaseline = "middle";
 
@@ -137,14 +138,11 @@ export function renderImageCanvas(image, threshold = 128, invert = false, labelW
   ctx.fillStyle = invert ? "#000000" : "#FFFFFF";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // draw image fitted
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
   const dw = image.width * ratio;
   const dh = image.height * ratio;
   ctx.drawImage(image, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
 
-  // apply threshold -> convert to 1-bit in later packing
-  // preview uses the canvas directly; packing will threshold by reading pixels
   return { canvas, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
@@ -159,11 +157,9 @@ export function renderBarcodeCanvas(value, type = 'CODE128', scale = 2, labelWid
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // draw barcode centered vertically
   const bcCanvas = document.createElement('canvas');
   try {
     JsBarcode(bcCanvas, value, { format: type, displayValue: false, width: scale });
-    // scale barcode to fit width
     const ratio = Math.min((canvas.width * 0.9) / bcCanvas.width, (canvas.height * 0.6) / bcCanvas.height);
     const dw = bcCanvas.width * ratio;
     const dh = bcCanvas.height * ratio;
@@ -195,7 +191,7 @@ export async function renderQRCanvas(value, size = 256, labelWidthMM = 12, label
   return { canvas, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-// Packing and printing (same confirmed protocol)
+// Packing and printing (confirmed protocol)
 function canvasToBitmap(canvas, bytesPerRow, invert = false) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
@@ -253,7 +249,7 @@ export async function printCanvasObject(canvasObj, copies=1, invert=false) {
   pushLog("Printing done");
 }
 
-// utility: simple detect label (best-effort)
+// simple detect label (best-effort)
 export async function detectLabel() {
   if (!printer.server) throw new Error("Not connected");
   try {
