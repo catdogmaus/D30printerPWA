@@ -11,6 +11,17 @@
       "src": "icons/icon-256.png",
       "sizes": "256x256",
       "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-monochrome.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
