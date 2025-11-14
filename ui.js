@@ -15,7 +15,6 @@ function $ (id) { return document.getElementById(id); }
 let previewTimer = null;
 const PREVIEW_DEBOUNCE_MS = 250;
 
-// switch tabs and update preview
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   const el = $(name);
@@ -26,17 +25,17 @@ function switchTab(name) {
   updatePreviewDebounced();
 }
 
-// place preview canvas scaled but preserving aspect ratio
+// Place preview canvas scaled and preserving aspect ratio
 function placePreviewCanvas(sourceCanvas) {
   const wrap = $('previewCanvasWrap');
   wrap.innerHTML = '';
 
-  // compute dynamic max height based on aspect ratio
+  // dynamic max height based on aspect ratio
   const aspect = sourceCanvas.width / sourceCanvas.height; // width/height
   let maxH = 250; // base
-  if (aspect < 0.2) maxH = 350; // very long labels -> bigger preview
+  if (aspect < 0.18) maxH = 350; // very long labels -> allow larger preview
 
-  // compute max available width (bounded)
+  // compute max available width but cap
   const maxW = Math.min(680, window.innerWidth * 0.9);
 
   const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
@@ -48,11 +47,14 @@ function placePreviewCanvas(sourceCanvas) {
   ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
 
-  // center and append
+  // add subtle border
+  cv.style.border = '1px solid #E6E9EE';
+  cv.style.borderRadius = '6px';
+
   wrap.appendChild(cv);
 }
 
-// debounced preview update
+// Debounced preview update
 function updatePreviewDebounced() {
   if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, PREVIEW_DEBOUNCE_MS);
@@ -62,8 +64,8 @@ async function updatePreview() {
   const active = document.querySelector('.tab-content:not(.hidden)');
   if (!active) return;
 
-  const labelW = Number($('labelWidth').value || 12);
-  const labelH = Number($('labelLength').value || 40);
+  const labelW = Number($('labelWidth').value || printer.settings.labelWidthMM || 12);
+  const labelH = Number($('labelLength').value || printer.settings.labelLengthMM || 40);
   const dpi = printer.settings.dpiPerMM || 8;
   const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
 
@@ -102,14 +104,20 @@ async function updatePreview() {
       const obj = await renderQRCanvas(val, size, labelW, labelH, dpi);
       placePreviewCanvas(obj.canvas);
     } else {
-      // settings/logs: leave preview as is
+      // settings/logs: keep previous preview
+    }
+
+    // small label-size hint under preview
+    const hint = document.getElementById('previewHint');
+    if (hint) {
+      hint.textContent = `Preview shown in label proportions (${labelW}×${labelH} mm). Change label size in Settings.`;
     }
   } catch (e) {
     console.warn('Preview error', e);
   }
 }
 
-// UI wiring
+// Wire UI
 async function setup() {
   // tabs
   document.querySelectorAll('.tab-pill').forEach(p => {
@@ -137,7 +145,7 @@ async function setup() {
   $('invertInput').addEventListener('change', ()=> updatePreviewDebounced());
   $('textInput').addEventListener('input', ()=> updatePreviewDebounced());
 
-  // barcode/qr inputs
+  // barcode / qr inputs
   $('barcodeInput').addEventListener('input', ()=> updatePreviewDebounced());
   $('barcodeType').addEventListener('change', ()=> updatePreviewDebounced());
   $('barcodeScale').addEventListener('input', ()=> updatePreviewDebounced());
@@ -152,8 +160,8 @@ async function setup() {
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const labelW = Number($('labelWidth').value || 12);
-        const labelH = Number($('labelLength').value || 40);
+        const labelW = Number($('labelWidth').value || printer.settings.labelWidthMM || 12);
+        const labelH = Number($('labelLength').value || printer.settings.labelLengthMM || 40);
         const dpi = printer.settings.dpiPerMM || 8;
         const widthPx = Math.round(labelW * dpi);
         const heightPx = Math.round(labelH * dpi);
@@ -173,7 +181,6 @@ async function setup() {
     reader.readAsDataURL(f);
   });
 
-  // image controls
   $('imageThreshold')?.addEventListener('input', ()=> updatePreviewDebounced());
   $('imageInvert')?.addEventListener('change', ()=> updatePreviewDebounced());
 
@@ -193,21 +200,19 @@ async function setup() {
   $('labelLength').addEventListener('input', ()=> updatePreviewDebounced());
   $('protocolSelect').addEventListener('change', ()=> localStorage.setItem('protocol', $('protocolSelect').value));
 
-  // font family setting
+  // font family
   const savedFont = localStorage.getItem('fontFamily') || 'sans-serif';
-  $('fontFamily').value = savedFont;
-  $('fontFamily').addEventListener('change', ()=> { localStorage.setItem('fontFamily', $('fontFamily').value); updatePreviewDebounced(); });
-
-  // preview for barcode & qr at start
-  $('barcodeInput').dispatchEvent(new Event('input'));
-  $('qrInput').dispatchEvent(new Event('input'));
+  if ($('fontFamily')) {
+    $('fontFamily').value = savedFont;
+    $('fontFamily').addEventListener('change', ()=> { localStorage.setItem('fontFamily', $('fontFamily').value); updatePreviewDebounced(); });
+  }
 
   // print action (FAB)
   $('fab-print').addEventListener('click', async () => {
     try {
       const active = document.querySelector('.tab-content:not(.hidden)');
-      const labelW = Number($('labelWidth').value || 12);
-      const labelH = Number($('labelLength').value || 40);
+      const labelW = Number($('labelWidth').value || printer.settings.labelWidthMM || 12);
+      const labelH = Number($('labelLength').value || printer.settings.labelLengthMM || 40);
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value || 1);
       const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
@@ -235,7 +240,7 @@ async function setup() {
     }
   });
 
-  // simple prefs
+  // local prefs
   $('fontSize').value = localStorage.getItem('fontSize') || 40;
   $('alignment').value = localStorage.getItem('alignment') || 'center';
   $('invertInput').checked = localStorage.getItem('invert') === 'true' || false;
