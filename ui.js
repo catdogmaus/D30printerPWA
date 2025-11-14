@@ -1,52 +1,105 @@
 // ui.js
-import { printer, connect, disconnect, printText, detectLabel } from './printer.js';
+import { printer, connect, disconnect, renderTextCanvas, renderImageCanvas, renderBarcodeCanvas, renderQRCanvas, printCanvasObject, detectLabel } from './printer.js';
 
-// small helper
-function $(id) { return document.getElementById(id); }
+// helper
+function $ (id) { return document.getElementById(id); }
+let previewTimer = null;
+const PREVIEW_DEBOUNCE_MS = 250;
 
-function saveSettings() {
-  const w = Number($('labelWidth').value || 12);
-  const h = Number($('labelLength').value || 40);
-  const proto = $('protocolSelect').value;
-  localStorage.setItem('labelWidth', w);
-  localStorage.setItem('labelLength', h);
-  localStorage.setItem('protocol', proto);
-  printer.settings.labelWidthMM = w;
-  printer.settings.labelLengthMM = h;
-  printer.settings.protocol = proto;
-}
-
-function loadSettings() {
-  const w = Number(localStorage.getItem('labelWidth') || 12);
-  const h = Number(localStorage.getItem('labelLength') || 40);
-  const proto = localStorage.getItem('protocol') || 'phomemo_raw';
-  $('labelWidth').value = w;
-  $('labelLength').value = h;
-  $('protocolSelect').value = proto;
-  printer.settings.labelWidthMM = w;
-  printer.settings.labelLengthMM = h;
-  printer.settings.protocol = proto;
-}
-
+// set up tabs & preview
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   const el = $(name);
   if (el) el.classList.remove('hidden');
-  // pill active style
   document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('bg-indigo-100','text-indigo-700'));
   const active = document.querySelector(`[data-tab="${name}"]`);
   if (active) active.classList.add('bg-indigo-100','text-indigo-700');
+  updatePreview();
 }
 
+function placePreviewCanvas(canvas) {
+  const wrap = $('previewCanvasWrap');
+  wrap.innerHTML = '';
+  // compute scale to fit within box while preserving aspect ratio and not exceeding max dims
+  const maxW = Math.min(420, window.innerWidth - 48);
+  const maxH = 200;
+  const scale = Math.min(maxW / canvas.width, maxH / canvas.height, 1);
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(canvas.width * scale);
+  cv.height = Math.round(canvas.height * scale);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.drawImage(canvas, 0, 0, cv.width, cv.height);
+  wrap.appendChild(cv);
+}
+
+// preview update logic (debounced)
+function updatePreviewDebounced() {
+  if (previewTimer) clearTimeout(previewTimer);
+  previewTimer = setTimeout(updatePreview, PREVIEW_DEBOUNCE_MS);
+}
+
+async function updatePreview() {
+  const active = document.querySelector('.tab-content:not(.hidden)');
+  if (!active) return;
+
+  const labelW = Number($('labelWidth').value || 12);
+  const labelH = Number($('labelLength').value || 40);
+  const dpi = printer.settings.dpiPerMM || 8;
+
+  try {
+    if (active.id === 'tab-text') {
+      const text = $('textInput').value;
+      const fontSize = Number($('fontSize').value || 36);
+      const align = $('alignment').value || 'center';
+      const invert = $('invertInput').checked;
+      const obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi);
+      placePreviewCanvas(obj.canvas);
+    } else if (active.id === 'tab-image') {
+      const preview = $('imagePreview');
+      const dataURL = preview.dataset.canvas;
+      if (dataURL) {
+        const img = new Image();
+        img.onload = () => {
+          const threshold = Number($('imageThreshold').value || 128);
+          const invert = $('imageInvert').checked;
+          const obj = renderImageCanvas(img, threshold, invert, labelW, labelH, dpi);
+          placePreviewCanvas(obj.canvas);
+        };
+        img.src = dataURL;
+      } else {
+        $('imagePreview').innerHTML = '<div class="text-sm text-gray-500">No image uploaded</div>';
+        $('previewCanvasWrap').innerHTML = '';
+      }
+    } else if (active.id === 'tab-barcode') {
+      const val = $('barcodeInput').value;
+      const type = $('barcodeType').value;
+      const scale = Number($('barcodeScale').value || 2);
+      const obj = renderBarcodeCanvas(val, type, scale, labelW, labelH, dpi);
+      placePreviewCanvas(obj.canvas);
+    } else if (active.id === 'tab-qr') {
+      const val = $('qrInput').value;
+      const size = Number($('qrSize').value || 256);
+      const obj = await renderQRCanvas(val, size, labelW, labelH, dpi);
+      placePreviewCanvas(obj.canvas);
+    } else {
+      // settings or logs: keep last preview
+    }
+  } catch (e) {
+    console.warn('Preview error', e);
+  }
+}
+
+// wire UI to actions
 async function setup() {
-  loadSettings();
-  // wire tabs
+  // tabs
   document.querySelectorAll('.tab-pill').forEach(p => {
-    p.addEventListener('click', () => switchTab(p.dataset.tab));
+    p.addEventListener('click', ()=> switchTab(p.dataset.tab));
   });
   switchTab('tab-text');
 
-  // connect/disconnect
+  // connect
   $('connectBtn').addEventListener('click', async () => {
     if (!printer.connected) {
       await connect();
@@ -54,141 +107,121 @@ async function setup() {
       await disconnect();
     }
   });
-  $('disconnectBtn').addEventListener('click', async () => {
-    await disconnect();
-  });
+  $('disconnectBtn')?.addEventListener('click', async () => await disconnect());
 
-  // detect label
-  $('detectLabelBtn').addEventListener('click', async () => {
-    try {
-      const res = await detectLabel();
-      if (res) {
-        alert('Detected label width mm: ' + res);
-        $('labelWidth').value = res;
-        saveSettings();
-      } else {
-        alert('Auto detect not available on this device.');
-      }
-    } catch (e) {
-      alert('Detect failed: ' + e);
-    }
-  });
+  // font controls
+  $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Math.min(200, Number($('fontSize').value || 36) + 2); updatePreviewDebounced();});
+  $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(8, Number($('fontSize').value || 36) - 2); updatePreviewDebounced();});
+  $('fontPreset').addEventListener('change', ()=> { $('fontSize').value = $('fontPreset').value; updatePreviewDebounced();});
+  $('fontSize').addEventListener('input', ()=> updatePreviewDebounced());
+  $('alignment').addEventListener('change', ()=> updatePreviewDebounced());
+  $('invertInput').addEventListener('change', ()=> updatePreviewDebounced());
+  $('textInput').addEventListener('input', ()=> updatePreviewDebounced());
+  $('copiesInput')?.addEventListener('input', ()=> {}); // no preview change
 
-  // Text UI: font controls
-  $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Math.min(200, Number($('fontSize').value || 36) + 2); });
-  $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(8, Number($('fontSize').value || 36) - 2); });
-  $('fontPreset').addEventListener('change', ()=> { $('fontSize').value = $('fontPreset').value; });
+  // barcode/qr inputs
+  $('barcodeInput').addEventListener('input', ()=> updatePreviewDebounced());
+  $('barcodeType').addEventListener('change', ()=> updatePreviewDebounced());
+  $('barcodeScale').addEventListener('input', ()=> updatePreviewDebounced());
+  $('qrInput').addEventListener('input', ()=> updatePreviewDebounced());
+  $('qrSize').addEventListener('input', ()=> updatePreviewDebounced());
 
-  // Text & FAB print
-  async function doPrintText() {
-    try {
-      saveSettings();
-      await printText({
-        text: $('textInput').value,
-        fontSize: Number($('fontSize').value),
-        alignment: $('alignment').value,
-        invert: $('invertInput').checked,
-        copies: Number($('copiesInput').value),
-        labelWidthMM: Number($('labelWidth').value),
-        labelLengthMM: Number($('labelLength').value),
-        dpi: printer.settings.dpiPerMM
-      });
-    } catch (e) {
-      alert('Print failed: ' + e);
-    }
-  }
-
-  $('fab-print').addEventListener('click', doPrintText);
-  $('printBtn')?.addEventListener('click', doPrintText);
-
-  // Image upload
+  // image upload
   $('imageFile')?.addEventListener('change', (ev) => {
     const f = ev.target.files && ev.target.files[0];
-    if (!f) return;
+    if (!f) { updatePreview(); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        // draw onto canvas sized to label (fit)
-        const labelW = Number($('labelWidth').value);
-        const labelH = Number($('labelLength').value);
-        const dpi = printer.settings.dpiPerMM;
-        const w = Math.round(labelW * dpi);
-        const h = Math.round(labelH * dpi);
-        const bytesPerRow = Math.ceil(w / 8);
+        const labelW = Number($('labelWidth').value || 12);
+        const labelH = Number($('labelLength').value || 40);
+        const dpi = printer.settings.dpiPerMM || 8;
+        const widthPx = Math.round(labelW * dpi);
+        const heightPx = Math.round(labelH * dpi);
+        const bytesPerRow = Math.ceil(widthPx / 8);
         const alignedW = bytesPerRow * 8;
-        const canvas = document.createElement('canvas');
-        canvas.width = alignedW;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // fit image inside
-        const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
-        const dw = img.width * ratio;
-        const dh = img.height * ratio;
-        ctx.drawImage(img, (canvas.width - dw)/2, (canvas.height - dh)/2, dw, dh);
-        const preview = $('imagePreview');
-        preview.innerHTML = '';
-        preview.appendChild(canvas);
-        // store the canvas on element for later printing
-        preview.dataset.canvas = canvas.toDataURL();
+        const c = document.createElement('canvas');
+        c.width = alignedW; c.height = heightPx;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,c.width,c.height);
+        const ratio = Math.min(c.width / img.width, c.height / img.height);
+        ctx.drawImage(img, (c.width - img.width*ratio)/2, (c.height - img.height*ratio)/2, img.width*ratio, img.height*ratio);
+        // store dataURL for preview & printing
+        $('imagePreview').dataset.canvas = c.toDataURL();
+        $('imagePreview').innerHTML = ''; $('imagePreview').appendChild(c);
+        updatePreviewDebounced();
       };
       img.src = reader.result;
     };
     reader.readAsDataURL(f);
   });
 
-  // Barcode preview
-  $('barcodeInput').addEventListener('input', () => {
-    const val = $('barcodeInput').value;
-    const scale = Number($('barcodeScale').value || 2);
-    const canvas = document.createElement('canvas');
-    try {
-      JsBarcode(canvas, val, { format: $('barcodeType').value, displayValue: false, width: scale });
-      $('barcodePreview').innerHTML = '';
-      $('barcodePreview').appendChild(canvas);
-    } catch (e) {
-      $('barcodePreview').textContent = 'Invalid barcode';
-    }
-  });
-  // fire initial
-  $('barcodeInput').dispatchEvent(new Event('input'));
+  // image threshold/invert
+  $('imageThreshold')?.addEventListener('input', ()=> updatePreviewDebounced());
+  $('imageInvert')?.addEventListener('change', ()=> updatePreviewDebounced());
 
-  // QR preview
-  $('qrInput').addEventListener('input', () => {
-    const val = $('qrInput').value;
-    const size = Number($('qrSize').value || 256);
-    const el = document.createElement('div');
-    el.innerHTML = '';
-    QRCode.toCanvas(document.createElement('canvas'), val, { width: size }).then(canvas => {
-      $('qrPreview').innerHTML = '';
-      $('qrPreview').appendChild(canvas);
-    }).catch(e => $('qrPreview').textContent = 'QR error: ' + e);
+  // detect label
+  $('detectLabelBtn')?.addEventListener('click', async () => {
+    try {
+      const res = await detectLabel();
+      if (res) {
+        alert('Detected label width mm: ' + res);
+        $('labelWidth').value = res; updatePreviewDebounced();
+      } else alert('Auto detect not available');
+    } catch (e) { alert('Detect failed: ' + e); }
   });
+
+  // label settings change -> preview update
+  $('labelWidth').addEventListener('input', ()=> updatePreviewDebounced());
+  $('labelLength').addEventListener('input', ()=> updatePreviewDebounced());
+  $('protocolSelect').addEventListener('change', ()=> localStorage.setItem('protocol', $('protocolSelect').value));
+
+  // preview for barcode & qr at start
+  $('barcodeInput').dispatchEvent(new Event('input'));
   $('qrInput').dispatchEvent(new Event('input'));
 
-  // load saved UI settings
-  $('fontSize').value = localStorage.getItem('fontSize') || 36;
+  // print action (FAB)
+  $('fab-print').addEventListener('click', async () => {
+    try {
+      const active = document.querySelector('.tab-content:not(.hidden)');
+      const labelW = Number($('labelWidth').value || 12);
+      const labelH = Number($('labelLength').value || 40);
+      const dpi = printer.settings.dpiPerMM || 8;
+      const copies = Number($('copiesInput').value || 1);
+      let obj;
+      if (active.id === 'tab-text') {
+        obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi);
+      } else if (active.id === 'tab-image') {
+        const dataURL = $('imagePreview').dataset.canvas;
+        if (!dataURL) return alert('Please upload an image first');
+        const img = new Image();
+        img.onload = async () => {
+          obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi);
+          await printCanvasObject(obj, copies, $('imageInvert').checked);
+        };
+        img.src = dataURL;
+        return;
+      } else if (active.id === 'tab-barcode') {
+        obj = renderBarcodeCanvas($('barcodeInput').value, $('barcodeType').value, Number($('barcodeScale').value||2), labelW, labelH, dpi);
+      } else if (active.id === 'tab-qr') {
+        obj = await renderQRCanvas($('qrInput').value, Number($('qrSize').value||256), labelW, labelH, dpi);
+      } else return alert('Nothing to print');
+      await printCanvasObject(obj, copies, $('invertInput').checked);
+    } catch (e) {
+      alert('Print failed: ' + e);
+    }
+  });
+
+  // save simple prefs
+  $('fontSize').value = localStorage.getItem('fontSize') || 40;
   $('alignment').value = localStorage.getItem('alignment') || 'center';
   $('invertInput').checked = localStorage.getItem('invert') === 'true' || false;
-
   $('fontSize').addEventListener('change', ()=> localStorage.setItem('fontSize', $('fontSize').value));
   $('alignment').addEventListener('change', ()=> localStorage.setItem('alignment', $('alignment').value));
   $('invertInput').addEventListener('change', ()=> localStorage.setItem('invert', $('invertInput').checked));
 
-  // keep connect button visible state
-  setInterval(()=> {
-    const btn = $('connectBtn');
-    if (printer.connected) btn.textContent = 'Connected'; else btn.textContent = 'Connect';
-  }, 800);
-
-  // logs area
-  const logArea = $('logArea');
-  if (logArea) logArea.value = '';
-
-  // initial setup done
-  console.log("UI setup complete");
+  // update preview initially
+  updatePreviewDebounced();
 }
 
 window.addEventListener('DOMContentLoaded', setup);
