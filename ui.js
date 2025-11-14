@@ -8,7 +8,8 @@ import {
   renderBarcodeCanvas,
   renderQRCanvas,
   printCanvasObject,
-  detectLabel
+  detectLabel,
+  makePreviewFromPrintCanvas
 } from './printer.js';
 
 function $ (id) { return document.getElementById(id); }
@@ -25,17 +26,16 @@ function switchTab(name) {
   updatePreviewDebounced();
 }
 
-// Place preview canvas scaled and preserving aspect ratio
+// create scaled preview canvas (source is HORIZONTAL preview canvas)
 function placePreviewCanvas(sourceCanvas) {
   const wrap = $('previewCanvasWrap');
-  wrap.innerHTML = '';
+  wrap.innerHTML = ''; // clear previous content (fix duplication)
 
-  // dynamic max height based on aspect ratio
-  const aspect = sourceCanvas.width / sourceCanvas.height; // width/height
-  let maxH = 250; // base
-  if (aspect < 0.18) maxH = 350; // very long labels -> allow larger preview
+  // dynamic max height based on aspect ratio (source is horizontal: w/h)
+  const aspect = sourceCanvas.width / sourceCanvas.height;
+  let maxH = 220; // base
+  if (aspect > 5) maxH = 350; // very long horizontal labels -> bigger preview
 
-  // compute max available width but cap
   const maxW = Math.min(680, window.innerWidth * 0.9);
 
   const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
@@ -47,14 +47,12 @@ function placePreviewCanvas(sourceCanvas) {
   ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
 
-  // add subtle border
   cv.style.border = '1px solid #E6E9EE';
   cv.style.borderRadius = '6px';
 
   wrap.appendChild(cv);
 }
 
-// Debounced preview update
 function updatePreviewDebounced() {
   if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, PREVIEW_DEBOUNCE_MS);
@@ -70,44 +68,52 @@ async function updatePreview() {
   const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
 
   try {
+    let printObj = null;
+
     if (active.id === 'tab-text') {
       const text = $('textInput').value;
       const fontSize = Number($('fontSize').value || 36);
       const align = $('alignment').value || 'center';
       const invert = $('invertInput').checked;
-      const obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi, fontFamily);
-      placePreviewCanvas(obj.canvas);
+      printObj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi, fontFamily);
     } else if (active.id === 'tab-image') {
       const preview = $('imagePreview');
       const dataURL = preview.dataset.canvas;
       if (dataURL) {
         const img = new Image();
         img.onload = () => {
-          const threshold = Number($('imageThreshold').value || 128);
           const invert = $('imageInvert').checked;
-          const obj = renderImageCanvas(img, threshold, invert, labelW, labelH, dpi);
-          placePreviewCanvas(obj.canvas);
+          // use same render pipeline used for printing
+          const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi);
+          const previewCanvas = makePreviewFromPrintCanvas(obj.canvas);
+          placePreviewCanvas(previewCanvas);
         };
         img.src = dataURL;
+        return;
       } else {
         $('previewCanvasWrap').innerHTML = '<div class="text-sm text-gray-500">No image uploaded</div>';
+        return;
       }
     } else if (active.id === 'tab-barcode') {
       const val = $('barcodeInput').value;
       const type = $('barcodeType').value;
       const scale = Number($('barcodeScale').value || 2);
-      const obj = renderBarcodeCanvas(val, type, scale, labelW, labelH, dpi);
-      placePreviewCanvas(obj.canvas);
+      printObj = renderBarcodeCanvas(val, type, scale, labelW, labelH, dpi);
     } else if (active.id === 'tab-qr') {
       const val = $('qrInput').value;
       const size = Number($('qrSize').value || 256);
-      const obj = await renderQRCanvas(val, size, labelW, labelH, dpi);
-      placePreviewCanvas(obj.canvas);
+      printObj = await renderQRCanvas(val, size, labelW, labelH, dpi);
     } else {
-      // settings/logs: keep previous preview
+      // settings or logs -> keep previous preview
+      return;
     }
 
-    // small label-size hint under preview
+    if (printObj && printObj.canvas) {
+      // convert print canvas (rotated for printer) into horizontal preview
+      const previewCanvas = makePreviewFromPrintCanvas(printObj.canvas);
+      placePreviewCanvas(previewCanvas);
+    }
+
     const hint = document.getElementById('previewHint');
     if (hint) {
       hint.textContent = `Preview shown in label proportions (${labelW}×${labelH} mm). Change label size in Settings.`;
@@ -117,9 +123,8 @@ async function updatePreview() {
   }
 }
 
-// Wire UI
+// UI wiring
 async function setup() {
-  // tabs
   document.querySelectorAll('.tab-pill').forEach(p => {
     p.addEventListener('click', ()=> switchTab(p.dataset.tab));
   });
