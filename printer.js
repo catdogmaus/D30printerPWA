@@ -1,4 +1,4 @@
-// printer.js
+// printer.js - safe printer module for D30 printing
 export const printer = {
   device: null,
   server: null,
@@ -9,7 +9,8 @@ export const printer = {
     labelLengthMM: 40,
     dpiPerMM: 8,
     protocol: "phomemo_raw",
-    fontFamily: "Inter, sans-serif"
+    fontFamily: "Inter, sans-serif",
+    forceInvert: false
   },
   logs: []
 };
@@ -17,26 +18,21 @@ export const printer = {
 function pushLog(msg) {
   printer.logs.push(msg);
   console.log(msg);
-  const logArea = document.getElementById("logArea");
-  if (logArea) {
-    logArea.value += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
-    logArea.scrollTop = logArea.scrollHeight;
-  }
+  const la = document.getElementById('logArea');
+  if (la) { la.value += `[${new Date().toLocaleTimeString()}] ${msg}\n`; la.scrollTop = la.scrollHeight; }
 }
 
 export async function connect() {
   try {
     pushLog("Requesting Bluetooth device...");
     const device = await navigator.bluetooth.requestDevice({
-  // accept all devices (let user choose); still request Phomemo services as optional.
-  acceptAllDevices: true,
-  optionalServices: [
-    '0000ff00-0000-1000-8000-00805f9b34fb',
-    '0000ff01-0000-1000-8000-00805f9b34fb',
-    '0000ff02-0000-1000-8000-00805f9b34fb'
-  ]
-});
-
+      acceptAllDevices: true,
+      optionalServices: [
+        '0000ff00-0000-1000-8000-00805f9b34fb',
+        '0000ff01-0000-1000-8000-00805f9b34fb',
+        '0000ff02-0000-1000-8000-00805f9b34fb'
+      ]
+    });
     printer.device = device;
     device.addEventListener('gattserverdisconnected', () => {
       pushLog("Device disconnected");
@@ -44,12 +40,11 @@ export async function connect() {
       printer.characteristic = null;
       updateConnUI(false);
     });
-
     printer.server = await device.gatt.connect();
     pushLog("GATT connected");
-
-    const svcs = await printer.server.getPrimaryServices();
-    for (const s of svcs) {
+    // find writable characteristic
+    const services = await printer.server.getPrimaryServices();
+    for (const s of services) {
       try {
         const chars = await s.getCharacteristics();
         for (const c of chars) {
@@ -61,9 +56,8 @@ export async function connect() {
             return;
           }
         }
-      } catch (e) {}
+      } catch(e) {}
     }
-
     pushLog("No writable characteristic found");
   } catch (e) {
     pushLog("Connect failed: " + e);
@@ -78,8 +72,6 @@ export async function disconnect() {
     printer.characteristic = null;
     pushLog("Disconnected");
     updateConnUI(false);
-  } else {
-    pushLog("Not connected");
   }
 }
 
@@ -90,13 +82,12 @@ function updateConnUI(connected) {
   if (btn) btn.textContent = connected ? "Disconnect" : "Connect";
 }
 
-// makeLabelCanvas
-function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert) {
+// canvas utilities
+export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) {
   const widthPx = Math.round(labelWidthMM * dpi);
   const heightPx = Math.round(labelLengthMM * dpi);
   const bytesPerRow = Math.ceil(widthPx / 8);
   const alignedWidth = bytesPerRow * 8;
-
   const canvas = document.createElement('canvas');
   canvas.width = alignedWidth;
   canvas.height = heightPx;
@@ -106,32 +97,30 @@ function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert) {
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-// renderTextCanvas
-export function renderTextCanvas(text, fontSize = 40, alignment = 'center', invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8, fontFamily = 'Inter, sans-serif') {
+export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   ctx.save();
+  // rotate so text prints along label (vertical label) — rotate -90deg and draw text horizontally
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
-  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  // allow bold included in fontFamily string if present like "bold Inter, sans-serif"
+  ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
   ctx.textAlign = alignment;
   ctx.textBaseline = "middle";
-  let x;
-  if (alignment === 'center') x = heightPx / 2;
-  else if (alignment === 'left') x = 10;
-  else x = heightPx - 10;
+  let x = heightPx / 2;
+  if (alignment === 'left') x = 10;
+  if (alignment === 'right') x = heightPx - 10;
   ctx.fillText(text, x, widthPx / 2);
   ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// renderImageCanvas
-export function renderImageCanvas(image, threshold = 128, invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
+export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
   const dw = image.width * ratio;
   const dh = image.height * ratio;
-  // draw rotated for print (rotate CCW)
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
@@ -140,8 +129,7 @@ export function renderImageCanvas(image, threshold = 128, invert = false, labelW
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// renderBarcodeCanvas (rotated for print)
-export function renderBarcodeCanvas(value, type = 'CODE128', scale = 2, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
+export function renderBarcodeCanvas(value, type='CODE128', scale=2, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const bcCanvas = document.createElement('canvas');
   try {
@@ -160,8 +148,7 @@ export function renderBarcodeCanvas(value, type = 'CODE128', scale = 2, labelWid
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// renderQRCanvas (rotated for print)
-export async function renderQRCanvas(value, size = 256, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
+export async function renderQRCanvas(value, size=256, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const qrCanvas = document.createElement('canvas');
   await QRCode.toCanvas(qrCanvas, value, { width: Math.min(size, 512) });
@@ -176,8 +163,7 @@ export async function renderQRCanvas(value, size = 256, labelWidthMM = 12, label
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// canvasToBitmap
-export function canvasToBitmap(canvas, bytesPerRow, invert = false) {
+export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
@@ -192,14 +178,6 @@ export function canvasToBitmap(canvas, bytesPerRow, invert = false) {
       if (isBlack) out[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
     }
   }
-  return out;
-}
-
-// Optional: force invert the already-created bitmap bytes (flip bits).
-// Use this only if you know the printer ignores inverted pixels and you need to invert in software.
-export function forceInvertBitmap(u8) {
-  const out = new Uint8Array(u8.length);
-  for (let i = 0; i < u8.length; i++) out[i] = ~u8[i] & 0xFF;
   return out;
 }
 
@@ -226,7 +204,6 @@ async function writeChunks(u8) {
     } else {
       await printer.characteristic.writeValueWithoutResponse(slice);
     }
-    pushLog(`Sent ${Math.min(i + CHUNK, u8.length)}/${u8.length}`);
     await new Promise(r => setTimeout(r, 20));
   }
 }
@@ -234,7 +211,12 @@ async function writeChunks(u8) {
 export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   if (!printer.characteristic) throw new Error("Not connected");
   const { canvas, bytesPerRow, heightPx } = canvasObj;
-  const bitmap = canvasToBitmap(canvas, bytesPerRow, invert);
+  let bitmap = canvasToBitmap(canvas, bytesPerRow, invert);
+  if (printer.settings.forceInvert) {
+    const inv = new Uint8Array(bitmap.length);
+    for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;
+    bitmap = inv;
+  }
   const packet = buildPacketFromBitmap(bitmap, bytesPerRow, heightPx);
   for (let i = 0; i < copies; i++) {
     await writeChunks(packet);
