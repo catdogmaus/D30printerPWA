@@ -34,12 +34,14 @@
   </header>
 
   <main class="container" style="padding-top:18px;">
-    <div id="previewRoot" class="mb-4 preview-wrap">
-      <div id="previewBox" class="card">
-        <div id="previewCanvasWrap"></div>
-      </div>
-      <div id="previewHint" class="small" style="margin-top:8px">Preview shown in label proportions. Change label size in Settings.</div>
+<div id="previewRoot" class="mb-4 preview-wrap">
+  <div id="previewBox" class="card" style="padding:18px;">
+    <div id="previewCanvasWrap" style="max-width:680px; width:100%; display:flex; align-items:center; justify-content:center; min-height:64px;">
+      <!-- Canvas will be injected here (no inner wrapper) -->
     </div>
+  </div>
+<div id="previewHint" class="small" style="margin-top:8px">Preview shown in label proportions. Change label size in Settings.</div>
+</div>
 
     <nav class="tabs" id="tabBar">
       <div class="tab active" data-tab="tab-text">Text</div>
@@ -188,9 +190,12 @@
     </section>
   </main>
 
-  <button id="fab-print" class="fab" title="Print">
-    ⏵
-  </button>
+  <button id="fab-print" class="fab" title="Print" aria-label="Print">
+  <!-- SVG printer icon -->
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M6 9V3h12v6h2v8h-4v4H8v-4H4V9h2zm2 10h8v-4H8v4zM18 5H6v4h12V5z"/>
+  </svg>
+</button>
 
   <script type="module" src="printer.js"></script>
   <script type="module" src="ui.js"></script>
