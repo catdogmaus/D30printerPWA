@@ -8,7 +8,7 @@
  #### How to use?
 Visit the actual printer app page below and click on install button in browser address window. On an Android device, press "Add to home screen". This will install Printer as PWA app on your desktop, which you can then use offline like any regular app.  
 For this to work, your browser must be Chromium-based (unfortunately, Firefox is not compatible). It is also likely that you will need to enable Bluetooth compatibility in your browser. 
-(for example in brave use brave://flags tab for that) 
+(for example in brave use ```brave://flags``` tab for that) 
 
 # [D30printerPWA](http://catdogmaus.github.io/D30printerPWA/)
 
