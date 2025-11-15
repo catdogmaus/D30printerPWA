@@ -17,27 +17,23 @@ let previewTimer = null;
 const PREVIEW_DEBOUNCE_MS = 250;
 
 function switchTab(name) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
   const el = $(name);
-  if (el) el.classList.remove('hidden');
-  document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('bg-indigo-100','text-indigo-700'));
-  const active = document.querySelector(`[data-tab="${name}"]`);
-  if (active) active.classList.add('bg-indigo-100','text-indigo-700');
+  if (el) el.style.display = 'block';
+  document.querySelectorAll('#tabBar .tab').forEach(p => p.classList.remove('active'));
+  const active = document.querySelector(`#tabBar .tab[data-tab="${name}"]`);
+  if (active) active.classList.add('active');
   updatePreviewDebounced();
 }
 
 // create scaled preview canvas (source is HORIZONTAL preview canvas)
 function placePreviewCanvas(sourceCanvas) {
   const wrap = $('previewCanvasWrap');
-  wrap.innerHTML = ''; // clear previous content (fix duplication)
-
-  // dynamic max height based on aspect ratio (source is horizontal: w/h)
+  wrap.innerHTML = ''; // clear previous content
   const aspect = sourceCanvas.width / sourceCanvas.height;
-  let maxH = 220; // base
-  if (aspect > 5) maxH = 350; // very long horizontal labels -> bigger preview
-
+  let maxH = 220;
+  if (aspect > 5) maxH = 350;
   const maxW = Math.min(680, window.innerWidth * 0.9);
-
   const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
   const cv = document.createElement('canvas');
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
@@ -46,10 +42,7 @@ function placePreviewCanvas(sourceCanvas) {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
-
-  cv.style.border = '1px solid #E6E9EE';
-  cv.style.borderRadius = '6px';
-
+  cv.className = 'preview-canvas';
   wrap.appendChild(cv);
 }
 
@@ -59,17 +52,14 @@ function updatePreviewDebounced() {
 }
 
 async function updatePreview() {
-  const active = document.querySelector('.tab-content:not(.hidden)');
+  const active = Array.from(document.querySelectorAll('.tab-content')).find(el => el.style.display !== 'none');
   if (!active) return;
-
   const labelW = Number($('labelWidth').value || printer.settings.labelWidthMM || 12);
   const labelH = Number($('labelLength').value || printer.settings.labelLengthMM || 40);
   const dpi = printer.settings.dpiPerMM || 8;
-  const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
-
+  const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'Inter, sans-serif';
   try {
     let printObj = null;
-
     if (active.id === 'tab-text') {
       const text = $('textInput').value;
       const fontSize = Number($('fontSize').value || 36);
@@ -83,7 +73,6 @@ async function updatePreview() {
         const img = new Image();
         img.onload = () => {
           const invert = $('imageInvert').checked;
-          // use same render pipeline used for printing
           const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi);
           const previewCanvas = makePreviewFromPrintCanvas(obj.canvas);
           placePreviewCanvas(previewCanvas);
@@ -91,7 +80,7 @@ async function updatePreview() {
         img.src = dataURL;
         return;
       } else {
-        $('previewCanvasWrap').innerHTML = '<div class="text-sm text-gray-500">No image uploaded</div>';
+        $('previewCanvasWrap').innerHTML = '<div class="small">No image uploaded</div>';
         return;
       }
     } else if (active.id === 'tab-barcode') {
@@ -104,16 +93,12 @@ async function updatePreview() {
       const size = Number($('qrSize').value || 256);
       printObj = await renderQRCanvas(val, size, labelW, labelH, dpi);
     } else {
-      // settings or logs -> keep previous preview
       return;
     }
-
     if (printObj && printObj.canvas) {
-      // convert print canvas (rotated for printer) into horizontal preview
       const previewCanvas = makePreviewFromPrintCanvas(printObj.canvas);
       placePreviewCanvas(previewCanvas);
     }
-
     const hint = document.getElementById('previewHint');
     if (hint) {
       hint.textContent = `Preview shown in label proportions (${labelW}×${labelH} mm). Change label size in Settings.`;
@@ -123,24 +108,13 @@ async function updatePreview() {
   }
 }
 
-// UI wiring
 async function setup() {
-  document.querySelectorAll('.tab-pill').forEach(p => {
-    p.addEventListener('click', ()=> switchTab(p.dataset.tab));
-  });
+  document.querySelectorAll('#tabBar .tab').forEach(p => p.addEventListener('click', ()=> switchTab(p.dataset.tab)));
   switchTab('tab-text');
-
-  // connect/disconnect
   $('connectBtn').addEventListener('click', async () => {
-    if (!printer.connected) {
-      await connect();
-    } else {
-      await disconnect();
-    }
+    if (!printer.connected) await connect(); else await disconnect();
     updatePreviewDebounced();
   });
-  $('disconnectBtn')?.addEventListener('click', async () => { await disconnect(); updatePreviewDebounced(); });
-
   // font controls
   $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Math.min(200, Number($('fontSize').value || 36) + 2); updatePreviewDebounced();});
   $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(8, Number($('fontSize').value || 36) - 2); updatePreviewDebounced();});
@@ -149,15 +123,11 @@ async function setup() {
   $('alignment').addEventListener('change', ()=> updatePreviewDebounced());
   $('invertInput').addEventListener('change', ()=> updatePreviewDebounced());
   $('textInput').addEventListener('input', ()=> updatePreviewDebounced());
-
-  // barcode / qr inputs
   $('barcodeInput').addEventListener('input', ()=> updatePreviewDebounced());
   $('barcodeType').addEventListener('change', ()=> updatePreviewDebounced());
   $('barcodeScale').addEventListener('input', ()=> updatePreviewDebounced());
   $('qrInput').addEventListener('input', ()=> updatePreviewDebounced());
   $('qrSize').addEventListener('input', ()=> updatePreviewDebounced());
-
-  // image upload
   $('imageFile')?.addEventListener('change', (ev) => {
     const f = ev.target.files && ev.target.files[0];
     if (!f) { updatePreviewDebounced(); return; }
@@ -185,42 +155,28 @@ async function setup() {
     };
     reader.readAsDataURL(f);
   });
-
   $('imageThreshold')?.addEventListener('input', ()=> updatePreviewDebounced());
   $('imageInvert')?.addEventListener('change', ()=> updatePreviewDebounced());
-
-  // detect label
   $('detectLabelBtn')?.addEventListener('click', async () => {
     try {
       const res = await detectLabel();
-      if (res) {
-        alert('Detected label width mm: ' + res);
-        $('labelWidth').value = res; updatePreviewDebounced();
-      } else alert('Auto detect not available');
+      if (res) { alert('Detected label width mm: ' + res); $('labelWidth').value = res; updatePreviewDebounced(); }
+      else alert('Auto detect not available');
     } catch (e) { alert('Detect failed: ' + e); }
   });
-
-  // label settings change -> preview update
   $('labelWidth').addEventListener('input', ()=> updatePreviewDebounced());
   $('labelLength').addEventListener('input', ()=> updatePreviewDebounced());
   $('protocolSelect').addEventListener('change', ()=> localStorage.setItem('protocol', $('protocolSelect').value));
-
-  // font family
-  const savedFont = localStorage.getItem('fontFamily') || 'sans-serif';
-  if ($('fontFamily')) {
-    $('fontFamily').value = savedFont;
-    $('fontFamily').addEventListener('change', ()=> { localStorage.setItem('fontFamily', $('fontFamily').value); updatePreviewDebounced(); });
-  }
-
-  // print action (FAB)
+  const savedFont = localStorage.getItem('fontFamily') || 'Inter, sans-serif';
+  if ($('fontFamily')) { $('fontFamily').value = savedFont; $('fontFamily').addEventListener('change', ()=> { printer.settings.fontFamily = $('fontFamily').value; localStorage.setItem('fontFamily', $('fontFamily').value); updatePreviewDebounced(); }); }
   $('fab-print').addEventListener('click', async () => {
     try {
-      const active = document.querySelector('.tab-content:not(.hidden)');
+      const active = Array.from(document.querySelectorAll('.tab-content')).find(el => el.style.display !== 'none');
       const labelW = Number($('labelWidth').value || printer.settings.labelWidthMM || 12);
       const labelH = Number($('labelLength').value || printer.settings.labelLengthMM || 40);
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value || 1);
-      const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'sans-serif';
+      const fontFamily = $('fontFamily')?.value || printer.settings.fontFamily || 'Inter, sans-serif';
       let obj;
       if (active.id === 'tab-text') {
         obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, fontFamily);
@@ -244,16 +200,12 @@ async function setup() {
       alert('Print failed: ' + e);
     }
   });
-
-  // local prefs
   $('fontSize').value = localStorage.getItem('fontSize') || 40;
   $('alignment').value = localStorage.getItem('alignment') || 'center';
   $('invertInput').checked = localStorage.getItem('invert') === 'true' || false;
   $('fontSize').addEventListener('change', ()=> localStorage.setItem('fontSize', $('fontSize').value));
   $('alignment').addEventListener('change', ()=> localStorage.setItem('alignment', $('alignment').value));
   $('invertInput').addEventListener('change', ()=> localStorage.setItem('invert', $('invertInput').checked));
-
-  // initial preview
   updatePreviewDebounced();
 }
 

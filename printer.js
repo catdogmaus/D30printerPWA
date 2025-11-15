@@ -1,7 +1,4 @@
 // printer.js
-// Core printing + canvas rendering logic for D30 (print canvas is rotated 90° CCW).
-// Preview (horizontal) is created by rotating the print canvas back to horizontal.
-
 export const printer = {
   device: null,
   server: null,
@@ -12,7 +9,7 @@ export const printer = {
     labelLengthMM: 40,
     dpiPerMM: 8,
     protocol: "phomemo_raw",
-    fontFamily: "sans-serif"
+    fontFamily: "Inter, sans-serif"
   },
   logs: []
 };
@@ -27,7 +24,6 @@ function pushLog(msg) {
   }
 }
 
-// ---------- Bluetooth connect / disconnect ----------
 export async function connect() {
   try {
     pushLog("Requesting Bluetooth device...");
@@ -89,13 +85,10 @@ function updateConnUI(connected) {
   const el = document.getElementById("connectionStatus");
   if (el) el.textContent = connected ? "Connected" : "Not connected";
   const btn = document.getElementById("connectBtn");
-  if (btn) btn.textContent = connected ? "Connected" : "Connect";
+  if (btn) btn.textContent = connected ? "Disconnect" : "Connect";
 }
 
-// ---------- Canvas rendering utilities ----------
-
-// Create an empty canvas sized to printer native raster orientation:
-// width = labelWidthMM * dpi (rounded up to multiple of 8), height = labelLengthMM * dpi
+// makeLabelCanvas
 function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert) {
   const widthPx = Math.round(labelWidthMM * dpi);
   const heightPx = Math.round(labelLengthMM * dpi);
@@ -103,87 +96,85 @@ function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert) {
   const alignedWidth = bytesPerRow * 8;
 
   const canvas = document.createElement('canvas');
-  canvas.width = alignedWidth; // printer expects width aligned to 8 bits
+  canvas.width = alignedWidth;
   canvas.height = heightPx;
   const ctx = canvas.getContext('2d');
-
   ctx.fillStyle = invert ? "#000000" : "#FFFFFF";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-// Render text into a canvas: text is rotated CCW inside the canvas so raster orientation remains native.
-export function renderTextCanvas(text, fontSize = 40, alignment = 'center', invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8, fontFamily = 'sans-serif') {
+// renderTextCanvas
+export function renderTextCanvas(text, fontSize = 40, alignment = 'center', invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8, fontFamily = 'Inter, sans-serif') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
-
-  // Rotate drawing context 90° CCW (so printed text runs along feed)
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
-
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.font = `bold ${fontSize}px ${fontFamily}`;
   ctx.textAlign = alignment;
   ctx.textBaseline = "middle";
-
   let x;
   if (alignment === 'center') x = heightPx / 2;
   else if (alignment === 'left') x = 10;
   else x = heightPx - 10;
-
   ctx.fillText(text, x, widthPx / 2);
-
   ctx.restore();
-
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// Render an uploaded image onto the printer-native canvas (fit & center)
+// renderImageCanvas
 export function renderImageCanvas(image, threshold = 128, invert = false, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
-
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
   const dw = image.width * ratio;
   const dh = image.height * ratio;
-  ctx.drawImage(image, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
-
+  // draw rotated for print (rotate CCW)
+  ctx.save();
+  ctx.translate(0, canvas.height);
+  ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(image, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
+  ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// Render barcode as a canvas sized to label (uses JsBarcode)
+// renderBarcodeCanvas (rotated for print)
 export function renderBarcodeCanvas(value, type = 'CODE128', scale = 2, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
-
   const bcCanvas = document.createElement('canvas');
   try {
     JsBarcode(bcCanvas, value, { format: type, displayValue: false, width: scale, margin: 0 });
-    const ratio = Math.min((canvas.width * 0.9) / bcCanvas.width, (canvas.height * 0.6) / bcCanvas.height);
+    const ratio = Math.min(heightPx / bcCanvas.width, widthPx / bcCanvas.height);
     const dw = bcCanvas.width * ratio;
     const dh = bcCanvas.height * ratio;
-    ctx.drawImage(bcCanvas, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+    ctx.save();
+    ctx.translate(0, heightPx);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(bcCanvas, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
+    ctx.restore();
   } catch (e) {
     pushLog("Barcode render error: " + e);
   }
-
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// Render QR (uses QRCode.toCanvas)
+// renderQRCanvas (rotated for print)
 export async function renderQRCanvas(value, size = 256, labelWidthMM = 12, labelLengthMM = 40, dpi = 8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
-
   const qrCanvas = document.createElement('canvas');
   await QRCode.toCanvas(qrCanvas, value, { width: Math.min(size, 512) });
-  const ratio = Math.min((canvas.width * 0.8) / qrCanvas.width, (canvas.height * 0.8) / qrCanvas.height);
+  const ratio = Math.min(heightPx / qrCanvas.width, widthPx / qrCanvas.height);
   const dw = qrCanvas.width * ratio;
   const dh = qrCanvas.height * ratio;
-  ctx.drawImage(qrCanvas, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
-
+  ctx.save();
+  ctx.translate(0, heightPx);
+  ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(qrCanvas, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
+  ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// Convert canvas to 1-bit bitmap (MSB-first)
+// canvasToBitmap
 export function canvasToBitmap(canvas, bytesPerRow, invert = false) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
@@ -204,13 +195,7 @@ export function canvasToBitmap(canvas, bytesPerRow, invert = false) {
 
 export function buildPacketFromBitmap(bitmap, bytesPerRow, heightPx) {
   const reset = new Uint8Array([0x1B, 0x40]);
-  const header = new Uint8Array([
-    0x1D, 0x76, 0x30, 0x00,
-    bytesPerRow & 0xff,
-    (bytesPerRow >> 8) & 0xff,
-    heightPx & 0xff,
-    (heightPx >> 8) & 0xff
-  ]);
+  const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff, heightPx & 0xff, (heightPx >> 8) & 0xff]);
   const footer = new Uint8Array([0x1B, 0x64, 0x00]);
   const out = new Uint8Array(reset.length + header.length + bitmap.length + footer.length);
   let p = 0;
@@ -236,7 +221,6 @@ async function writeChunks(u8) {
   }
 }
 
-// Print a canvasObj {canvas, bytesPerRow, widthPx, heightPx}
 export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   if (!printer.characteristic) throw new Error("Not connected");
   const { canvas, bytesPerRow, heightPx } = canvasObj;
@@ -249,19 +233,14 @@ export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   pushLog("Printing done");
 }
 
-// Create a HORIZONTAL preview canvas from the PRINT canvas (rotate +90° so text reads normally)
 export function makePreviewFromPrintCanvas(printCanvas) {
-  // printCanvas currently: width = label width (aligned to 8), height = label length
-  // It contains rotated text (text rotated CCW). To show horizontally, rotate +90deg.
   const src = printCanvas;
   const preview = document.createElement('canvas');
-  preview.width = src.height; // swap
+  preview.width = src.height;
   preview.height = src.width;
   const ctx = preview.getContext('2d');
-  // white background
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, preview.width, preview.height);
-  // translate/rotate: move origin to right edge and rotate +90deg
   ctx.save();
   ctx.translate(preview.width, 0);
   ctx.rotate(Math.PI / 2);
@@ -270,7 +249,6 @@ export function makePreviewFromPrintCanvas(printCanvas) {
   return preview;
 }
 
-// Best-effort label detection
 export async function detectLabel() {
   if (!printer.server) throw new Error("Not connected");
   try {

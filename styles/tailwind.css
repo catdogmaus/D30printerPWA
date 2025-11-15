@@ -1,0 +1,25 @@
+
+/* Minimal utility styles used by the app (not full Tailwind) */
+:root{--bg:#f8fafc;--card:#ffffff;--muted:#6b7280;--accent:#2563eb;}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+body{background:var(--bg);color:#111827;font-size:15px}
+.container{max-width:1100px;margin:0 auto;padding:1rem}
+.header{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,0.04);border-bottom:1px solid #eef2f7}
+.flex{display:flex;align-items:center}
+.space-between{justify-content:space-between}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:0.5rem 0.9rem;border-radius:8px;border:none;cursor:pointer}
+.btn-blue{background:var(--accent);color:white;box-shadow:0 6px 18px rgba(37,99,235,0.18)}
+.card{background:var(--card);padding:1rem;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.04);border:1px solid #f0f4f8}
+.tabs{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem}
+.tab{background:#fff;padding:0.5rem 0.8rem;border-radius:999px;box-shadow:0 1px 2px rgba(0,0,0,0.03);cursor:pointer}
+.tab.active{background:#eef2ff;color:var(--accent)}
+.input, select, textarea{width:100%;padding:0.6rem;border:1px solid #e6edf3;border-radius:8px}
+.grid{display:grid;gap:0.75rem}
+.grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.row{display:flex;gap:0.5rem;align-items:center}
+.small{font-size:0.85rem;color:var(--muted)}
+.fab{position:fixed;right:20px;bottom:24px;width:56px;height:56px;border-radius:999px;background:#10b981;color:white;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(16,185,129,0.18)}
+.preview-wrap{display:flex;flex-direction:column;align-items:center}
+.preview-canvas{border:1px solid #E6E9EE;border-radius:6px;background:white}
+`

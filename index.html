@@ -4,178 +4,135 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>D30 Printer PWA</title>
-
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#ffffff" />
-
-  <!-- suppress Tailwind CDN warning -->
-  <script>tailwind = {config:{warnings:false}}</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- optional Google fonts for font family choices -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet">
-
-  <!-- Barcode & QR libs -->
+  <link href="styles/tailwind.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
-
   <style>
-    /* preview frame constraints */
-    #previewRoot { display:flex; justify-content:center; align-items:center; padding:12px; }
-    /* Option B: white card with shadow */
-    #previewBox { border-radius:10px; background:#fff; box-shadow: 0 6px 18px rgba(0,0,0,0.06); padding:10px; border:1px solid #EFF2F6; }
-    #previewCanvasWrap { display:flex; align-items:center; justify-content:center; min-height:40px; min-width:40px; }
-    .tab-pill { cursor:pointer }
-    #fab-print { position: fixed; right: 20px; bottom: 24px; z-index: 60; }
+    body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+    #previewBox { max-width:680px; width:100%; }
+    #previewCanvasWrap { display:flex; align-items:center; justify-content:center; padding:12px; min-height:60px; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-900 min-h-screen">
-
-  <header class="bg-white shadow-sm">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <img src="icons/icon-256.png" alt="logo" class="w-10 h-10 rounded-md"/>
+<body>
+  <header class="header">
+    <div class="container flex space-between" style="padding:12px 0;">
+      <div class="flex" style="gap:12px;align-items:center">
+        <img src="icons/icon-256.png" alt="logo" style="width:44px;height:44px;border-radius:8px">
         <div>
-          <div class="text-lg font-semibold">D30 Printer</div>
-          <div class="text-xs text-gray-500">Phomemo D30C — Web PWA</div>
+          <div style="font-weight:600;font-size:18px">D30 Printer</div>
+          <div class="small">Phomemo D30C — Web PWA</div>
         </div>
       </div>
-
-      <div class="flex items-center gap-3">
-        <div id="connectionStatus" class="text-sm text-gray-600">Not connected</div>
-        <button id="connectBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700">Connect</button>
+      <div class="flex" style="gap:12px;align-items:center">
+        <div id="connectionStatus" class="small">Not connected</div>
+        <button id="connectBtn" class="btn btn-blue">Connect</button>
       </div>
     </div>
   </header>
 
-<main class="max-w-5xl mx-auto p-4">
-  <div id="previewRoot" class="mb-4">
-    <div id="previewBox" class="w-full flex flex-col items-center">
-      <div id="previewCanvasWrap"
-           class="flex items-center justify-center p-2"
-           style="max-width:680px; width:100%;">
-        <!-- Preview canvas injected here -->
+  <main class="container" style="padding-top:18px;">
+    <div id="previewRoot" class="mb-4 preview-wrap">
+      <div id="previewBox" class="card">
+        <div id="previewCanvasWrap"></div>
       </div>
-      <div id="previewHint"
-           class="text-xs text-gray-500 mt-1">
-           Preview shown in label proportions. Change label size in Settings.
-      </div>
+      <div id="previewHint" class="small" style="margin-top:8px">Preview shown in label proportions. Change label size in Settings.</div>
     </div>
-  </div>
-</main>
 
-
-    <!-- Tabs -->
-    <nav class="mb-4">
-      <div class="flex gap-2 flex-wrap">
-        <div class="tab-pill px-3 py-1 rounded-full bg-white shadow-sm text-sm font-medium" data-tab="tab-text">Text</div>
-        <div class="tab-pill px-3 py-1 rounded-full bg-white shadow-sm text-sm font-medium" data-tab="tab-image">Image</div>
-        <div class="tab-pill px-3 py-1 rounded-full bg-white shadow-sm text-sm font-medium" data-tab="tab-barcode">Barcode</div>
-        <div class="tab-pill px-3 py-1 rounded-full bg-white shadow-sm text-sm font-medium" data-tab="tab-qr">QR</div>
-        <div class="tab-pill px-3 py-1 rounded-full bg-white shadow-sm text-sm font-medium" data-tab="tab-settings">Settings</div>
-        <div class="tab-pill px-3 py-1 rounded-full bg-white shadow-sm text-sm font-medium" data-tab="tab-logs">Logs</div>
-      </div>
+    <nav class="tabs" id="tabBar">
+      <div class="tab active" data-tab="tab-text">Text</div>
+      <div class="tab" data-tab="tab-image">Image</div>
+      <div class="tab" data-tab="tab-barcode">Barcode</div>
+      <div class="tab" data-tab="tab-qr">QR</div>
+      <div class="tab" data-tab="tab-settings">Settings</div>
+      <div class="tab" data-tab="tab-logs">Logs</div>
     </nav>
 
-    <!-- Contents -->
-    <section class="bg-white p-4 rounded-lg shadow-sm">
-      <!-- Text tab -->
+    <section class="card" style="margin-top:12px">
       <div id="tab-text" class="tab-content">
-        <label class="block text-sm font-medium text-gray-700">Text</label>
-        <input id="textInput" class="mt-2 w-full border px-3 py-2 rounded" value="Hello D30C" />
-
-        <!-- responsive controls grid -->
-        <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label class="small">Text</label>
+        <input id="textInput" class="input" value="Hello D30C" />
+        <div class="grid cols-2" style="margin-top:12px">
           <div>
-            <label class="text-sm text-gray-600">Font size</label>
-            <div class="mt-1 flex items-center gap-2">
-              <button id="fontDec" class="px-2 py-1 border rounded">−</button>
-              <input id="fontSize" type="number" min="8" max="200" value="40" class="w-20 text-center border rounded px-2 py-1"/>
-              <button id="fontInc" class="px-2 py-1 border rounded">+</button>
-              <select id="fontPreset" class="ml-2 border rounded px-2 py-1">
+            <label class="small">Font size</label>
+            <div class="row" style="margin-top:6px">
+              <button id="fontDec" class="btn" style="border:1px solid #e6edf3">−</button>
+              <input id="fontSize" type="number" class="input" value="40" style="width:80px;text-align:center" />
+              <button id="fontInc" class="btn" style="border:1px solid #e6edf3">+</button>
+              <select id="fontPreset" class="input" style="width:140px;margin-left:6px">
                 <option value="24">Small (24)</option>
                 <option value="32">Normal (32)</option>
                 <option value="40" selected>Large (40)</option>
                 <option value="48">Huge (48)</option>
               </select>
             </div>
-            <div class="mt-2 text-xs text-gray-500">Label size can be adjusted in Settings.</div>
+            <div class="small" style="margin-top:6px">Label size can be adjusted in Settings.</div>
           </div>
-
           <div>
-            <label class="text-sm text-gray-600">Alignment</label>
-            <select id="alignment" class="mt-1 block w-full border rounded px-2 py-1">
+            <label class="small">Alignment</label>
+            <select id="alignment" class="input" style="margin-top:6px">
               <option value="center">Center</option>
               <option value="left">Left</option>
               <option value="right">Right</option>
             </select>
           </div>
-
           <div>
-            <label class="text-sm text-gray-600">Copies</label>
-            <input id="copiesInput" type="number" value="1" min="1" class="mt-1 w-28 border rounded px-2 py-1" />
+            <label class="small">Copies</label>
+            <input id="copiesInput" type="number" class="input" value="1" min="1" style="width:80px" />
           </div>
-
-          <div class="flex items-end">
-            <label class="text-sm text-gray-600 mr-2">Invert</label>
-            <input id="invertInput" type="checkbox" class="mt-1" />
+          <div style="align-self:end">
+            <label class="small">Invert</label><br>
+            <input id="invertInput" type="checkbox" />
           </div>
         </div>
-
-        <div id="textNote" class="mt-3 text-sm text-gray-500">Use presets + ± for precise control on mobile.</div>
       </div>
 
-      <!-- Image tab -->
-      <div id="tab-image" class="tab-content hidden">
-        <label class="block text-sm font-medium text-gray-700">Upload image</label>
-        <input id="imageFile" type="file" accept="image/*" class="mt-2" />
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+      <div id="tab-image" class="tab-content" style="display:none">
+        <label class="small">Upload image</label>
+        <input id="imageFile" type="file" accept="image/*" class="input" style="margin-top:8px" />
+        <div class="grid cols-2" style="margin-top:12px">
           <div>
-            <label class="text-sm text-gray-600">Threshold</label>
-            <input id="imageThreshold" type="range" min="0" max="255" value="128" class="w-full mt-1" />
-            <div class="text-xs text-gray-500 mt-1">Threshold defines how aggressively dark areas are detected. Lower → lighter; Higher → stronger black.</div>
+            <label class="small">Threshold</label>
+            <input id="imageThreshold" type="range" min="0" max="255" value="128" style="width:100%" />
+            <div class="small">Threshold defines how aggressively dark areas are detected.</div>
           </div>
           <div>
-            <label class="text-sm text-gray-600">Invert</label>
-            <input id="imageInvert" type="checkbox" class="mt-1" />
+            <label class="small">Invert</label><br>
+            <input id="imageInvert" type="checkbox" />
           </div>
         </div>
-
-        <div id="imagePreview" class="mt-3"></div>
+        <div id="imagePreview" style="margin-top:12px"></div>
       </div>
 
-      <!-- Barcode -->
-      <div id="tab-barcode" class="tab-content hidden">
-        <label class="block text-sm font-medium text-gray-700">Barcode (Code 128 recommended)</label>
-        <input id="barcodeInput" class="mt-2 w-full border px-3 py-2 rounded" value="123456789012" />
-        <div class="mt-2 text-xs text-gray-500">Code 128 works in most cases. Change type only if necessary.</div>
-
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+      <div id="tab-barcode" class="tab-content" style="display:none">
+        <label class="small">Barcode (Code 128 recommended)</label>
+        <input id="barcodeInput" class="input" value="123456789012" style="margin-top:8px"/>
+        <div class="small" style="margin-top:8px">Code 128 works in most cases.</div>
+        <div class="grid cols-2" style="margin-top:12px">
           <div>
-            <label class="text-sm text-gray-600">Type</label>
-            <select id="barcodeType" class="mt-1 block w-full border rounded px-2 py-1">
+            <label class="small">Type</label>
+            <select id="barcodeType" class="input" style="margin-top:6px">
               <option value="CODE128">Code 128 (Default)</option>
               <option value="EAN13">EAN-13</option>
               <option value="UPC">UPC</option>
             </select>
           </div>
           <div>
-            <label class="text-sm text-gray-600">Scale</label>
-            <input id="barcodeScale" type="number" min="1" max="6" value="2" class="mt-1 w-24 border rounded px-2 py-1" />
+            <label class="small">Scale</label>
+            <input id="barcodeScale" type="number" class="input" value="2" style="width:80px;margin-top:6px" />
           </div>
         </div>
-
-        <div id="barcodePreview" class="mt-4"></div>
       </div>
 
-      <!-- QR -->
-      <div id="tab-qr" class="tab-content hidden">
-        <label class="block text-sm font-medium text-gray-700">QR content</label>
-        <input id="qrInput" class="mt-2 w-full border px-3 py-2 rounded" value="https://example.com" />
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+      <div id="tab-qr" class="tab-content" style="display:none">
+        <label class="small">QR content</label>
+        <input id="qrInput" class="input" value="https://example.com" style="margin-top:8px" />
+        <div class="grid cols-2" style="margin-top:12px">
           <div>
-            <label class="text-sm text-gray-600">Error correction</label>
-            <select id="qrEc" class="mt-1 block w-full border rounded px-2 py-1">
+            <label class="small">Error correction</label>
+            <select id="qrEc" class="input" style="margin-top:6px">
               <option value="L">L - Low</option>
               <option value="M" selected>M - Medium</option>
               <option value="Q">Q - Quartile</option>
@@ -183,83 +140,59 @@
             </select>
           </div>
           <div>
-            <label class="text-sm text-gray-600">Size (px)</label>
-            <input id="qrSize" type="number" min="64" max="800" value="256" class="mt-1 w-28 border rounded px-2 py-1" />
+            <label class="small">Size (px)</label>
+            <input id="qrSize" type="number" class="input" value="256" min="64" max="800" style="width:100px;margin-top:6px" />
           </div>
         </div>
-
-        <div id="qrPreview" class="mt-4"></div>
       </div>
 
-      <!-- Settings -->
-      <div id="tab-settings" class="tab-content hidden">
-        <h3 class="text-sm font-medium">Printer & Label settings</h3>
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+      <div id="tab-settings" class="tab-content" style="display:none">
+        <h4 class="small">Printer & Label settings</h4>
+        <div class="grid cols-2" style="margin-top:8px">
           <div>
-            <label class="text-sm text-gray-600">Label width (mm)</label>
-            <input id="labelWidth" type="number" min="8" max="60" value="12" class="mt-1 w-28 border rounded px-2 py-1" />
+            <label class="small">Label width (mm)</label>
+            <input id="labelWidth" type="number" class="input" value="12" min="8" max="60" style="width:120px" />
           </div>
           <div>
-            <label class="text-sm text-gray-600">Label length (mm)</label>
-            <input id="labelLength" type="number" min="10" max="200" value="40" class="mt-1 w-28 border rounded px-2 py-1" />
+            <label class="small">Label length (mm)</label>
+            <input id="labelLength" type="number" class="input" value="40" min="10" max="400" style="width:120px" />
           </div>
           <div>
-            <label class="text-sm text-gray-600">Protocol</label>
-            <select id="protocolSelect" class="mt-1 block w-full border rounded px-2 py-1">
+            <label class="small">Protocol</label>
+            <select id="protocolSelect" class="input">
               <option value="phomemo_raw">Phomemo raw (D30C)</option>
               <option value="escpos_raster">ESC/POS raster (legacy)</option>
             </select>
           </div>
           <div>
-            <label class="text-sm text-gray-600">Auto detect label</label>
-            <div class="mt-1 flex gap-2">
-              <button id="detectLabelBtn" class="px-3 py-1 border rounded">Detect</button>
-            </div>
+            <label class="small">Auto detect label</label><br>
+            <button id="detectLabelBtn" class="btn" style="border:1px solid #e6edf3;margin-top:6px">Detect</button>
           </div>
-
-          <div class="col-span-2 mt-3">
-            <label class="text-sm text-gray-600">Font family</label>
-            <select id="fontFamily" class="mt-1 block w-full border rounded px-2 py-1">
+          <div style="grid-column:1/3">
+            <label class="small">Font family</label>
+            <select id="fontFamily" class="input" style="margin-top:6px">
+              <option value="Inter, sans-serif">Inter (default)</option>
               <option value="sans-serif">System Sans</option>
               <option value="serif">Serif</option>
               <option value="monospace">Monospace</option>
               <option value="Roboto, sans-serif">Roboto</option>
-              <option value="Noto Sans, sans-serif">Noto Sans</option>
             </select>
-          </div>
-        </div>
-
-        <div class="mt-4">
-          <h4 class="text-sm font-medium">Connection</h4>
-          <div class="mt-2 flex gap-2">
-            <button id="disconnectBtn" class="px-3 py-1 border rounded">Disconnect</button>
           </div>
         </div>
       </div>
 
-      <!-- Logs -->
-      <div id="tab-logs" class="tab-content hidden">
-        <h3 class="text-sm font-medium">Logs</h3>
-        <textarea id="logArea" readonly class="w-full mt-2 h-64 font-mono text-xs"></textarea>
+      <div id="tab-logs" class="tab-content" style="display:none">
+        <h4 class="small">Logs</h4>
+        <textarea id="logArea" class="input" style="height:220px;font-family:monospace"></textarea>
       </div>
     </section>
   </main>
 
-  <!-- Print FAB -->
-  <button id="fab-print" class="bg-green-500 text-white rounded-full w-16 h-16 shadow-xl flex items-center justify-center" title="Print">
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V3h12v6M6 14h12v7H6v-7z" />
-    </svg>
+  <button id="fab-print" class="fab" title="Print">
+    ⏵
   </button>
 
-  <!-- scripts -->
   <script type="module" src="printer.js"></script>
   <script type="module" src="ui.js"></script>
-
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("service-worker.js").then(()=>console.log('SW registered')).catch(e=>console.warn('SW failed',e));
-    }
-  </script>
 </body>
 </html>
