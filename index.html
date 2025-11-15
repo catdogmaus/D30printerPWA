@@ -48,16 +48,22 @@
     </div>
   </header>
 
-  <main class="max-w-5xl mx-auto p-4">
-    <!-- Shared Preview (top) -->
-    <div id="previewRoot" class="mb-4">
-      <div id="previewBox" style="max-width:680px; width:100%;">
-        <div id="previewCanvasWrap" class="flex items-center justify-center p-2">
-          <!-- Canvas preview injected here -->
-          <div id="previewHint" class="text-xs text-gray-500 mt-2 px-2">Preview shown in label proportions. Change label size in Settings.</div>
-        </div>
+<main class="max-w-5xl mx-auto p-4">
+  <div id="previewRoot" class="mb-4">
+    <div id="previewBox" class="w-full flex flex-col items-center">
+      <div id="previewCanvasWrap"
+           class="flex items-center justify-center p-2"
+           style="max-width:680px; width:100%;">
+        <!-- Preview canvas injected here -->
+      </div>
+      <div id="previewHint"
+           class="text-xs text-gray-500 mt-1">
+           Preview shown in label proportions. Change label size in Settings.
       </div>
     </div>
+  </div>
+</main>
+
 
     <!-- Tabs -->
     <nav class="mb-4">
