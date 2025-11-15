@@ -1,1 +1,19 @@
-const CACHE_NAME="d30pwa-v1";const ASSETS=["./","./index.html","./printer.js","./ui.js","./manifest.json","./styles/tailwind.css","./icons/icon-256.png","./icons/icon-maskable.png","./icons/icon-monochrome.png"];self.addEventListener("install",e=>{e.waitUntil((async()=>{const c=await caches.open(CACHE_NAME);await c.addAll(ASSETS);})());self.skipWaiting();});self.addEventListener("activate",e=>{e.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.map(k=>k!==CACHE_NAME?caches.delete(k):null));})());self.clients.claim();});self.addEventListener("fetch",e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});
+const CACHE_NAME = "d30pwa-v1";
+const ASSETS = ["./", "./index.html", "./printer.js", "./ui.js", "./manifest.json", "./styles/tailwind.css", "./icons/icon-256.png", "./icons/icon-maskable.png", "./icons/icon-monochrome.png"];
+self.addEventListener("install", (e) => {
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE_NAME);
+    await c.addAll(ASSETS);
+  })());
+  self.skipWaiting();
+});
+self.addEventListener("activate", (e) => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null));
+  })());
+  self.clients.claim();
+});
+self.addEventListener("fetch", (e) => {
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
