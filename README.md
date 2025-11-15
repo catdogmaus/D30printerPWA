@@ -11,7 +11,7 @@ For this to work, your browser must be Chromium-based (unfortunately, Firefox is
 (for example in brave use ```brave://flags``` tab for that)   
 
 # [D30printerPWA](http://catdogmaus.github.io/D30printerPWA/)
-For you mobile device to open page use  
+For you mobile device to open page use   
 ![QR](icons/qrcode_catdogmaus.github.io.png)  
 
 #### What could go wrong?
