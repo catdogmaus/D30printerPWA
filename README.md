@@ -3,7 +3,7 @@
 </span><br/> 
 
  
- # 🔸D30printerPWA. Install the app without compiler or other hassle🔸
+ # 🔸D30printerPWA. Install it here without any compiler or other unnecessary hassles.🔸
  This is a boilerplate for deploying Phomemo D30 printer webapp using Github Pages.   
  #### How to use?
 Visit the actual printer app page below and click on install button in browser address window. On an Android device, press "Add to home screen". This will install Printer as PWA app on your desktop, which you can then use offline like any regular app.  
