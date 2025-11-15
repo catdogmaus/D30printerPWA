@@ -63,12 +63,12 @@
               <button id="fontDec" class="btn" style="border:1px solid #e6edf3">−</button>
               <input id="fontSize" type="number" class="input" value="40" style="width:80px;text-align:center" />
               <button id="fontInc" class="btn" style="border:1px solid #e6edf3">+</button>
-              <select id="fontPreset" class="input" style="width:140px;margin-left:6px">
+              <select id="fontPreset" class="input" /> <label class="inline-flex items-center" style="margin-left:8px"><input type="checkbox" id="fontBold" style="margin-right:6px"/> Bold</label style="width:140px;margin-left:6px">
                 <option value="24">Small (24)</option>
                 <option value="32">Normal (32)</option>
                 <option value="40" selected>Large (40)</option>
                 <option value="48">Huge (48)</option>
-              </select>
+              <option value="phomemo_legacy">Phomemo (Legacy)</option><option value="escpos_raster">ESC/POS Raster</option><option value="zpl">ZPL (Experimental)</option></select>
             </div>
             <div class="small" style="margin-top:6px">Label size can be adjusted in Settings.</div>
           </div>
@@ -114,7 +114,7 @@
         <div class="small" style="margin-top:8px">Code 128 works in most cases.</div>
         <div class="grid cols-2" style="margin-top:12px">
           <div>
-            <label class="small">Type</label>
+            <label for="barcodeType" class="small">Type</label>
             <select id="barcodeType" class="input" style="margin-top:6px">
               <option value="CODE128">Code 128 (Default)</option>
               <option value="EAN13">EAN-13</option>
@@ -152,11 +152,11 @@
         <h4 class="small">Printer & Label settings</h4>
         <div class="grid cols-2" style="margin-top:8px">
           <div>
-            <label class="small">Label width (mm)</label>
+            <label for="labelWidth" class="small">Label width (mm)</label>
             <input id="labelWidth" type="number" class="input" value="12" min="8" max="60" style="width:120px" />
           </div>
           <div>
-            <label class="small">Label length (mm)</label>
+            <label for="labelLength" class="small">Label length (mm)</label>
             <input id="labelLength" type="number" class="input" value="40" min="10" max="400" style="width:120px" />
           </div>
           <div>
@@ -171,7 +171,7 @@
             <button id="detectLabelBtn" class="btn" style="border:1px solid #e6edf3;margin-top:6px">Detect</button>
           </div>
           <div style="grid-column:1/3">
-            <label class="small">Font family</label>
+            <label for="fontFamily" class="small">Font family</label>
             <select id="fontFamily" class="input" style="margin-top:6px">
               <option value="Inter, sans-serif">Inter (default)</option>
               <option value="sans-serif">System Sans</option>
@@ -187,7 +187,7 @@
         <h4 class="small">Logs</h4>
         <textarea id="logArea" class="input" style="height:220px;font-family:monospace"></textarea>
       </div>
-    </section>
+    <div style="margin-top:12px"><label class="small">Printer options</label><div class="row"><label for="forceInvert">Force bitmap invert</label><input id="forceInvert" type="checkbox" style="margin-left:8px"/></div></div></section>
   </main>
 
   <button id="fab-print" class="fab" title="Print" aria-label="Print">
@@ -199,5 +199,5 @@
 
   <script type="module" src="printer.js"></script>
   <script type="module" src="ui.js"></script>
-</body>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(e=>console.warn("SW failed",e));)}</script></body>
 </html>
