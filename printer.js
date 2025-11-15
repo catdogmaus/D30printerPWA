@@ -28,13 +28,15 @@ export async function connect() {
   try {
     pushLog("Requesting Bluetooth device...");
     const device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "D30" }],
-      optionalServices: [
-        '0000ff00-0000-1000-8000-00805f9b34fb',
-        '0000ff01-0000-1000-8000-00805f9b34fb',
-        '0000ff02-0000-1000-8000-00805f9b34fb'
-      ]
-    });
+  // accept all devices (let user choose); still request Phomemo services as optional.
+  acceptAllDevices: true,
+  optionalServices: [
+    '0000ff00-0000-1000-8000-00805f9b34fb',
+    '0000ff01-0000-1000-8000-00805f9b34fb',
+    '0000ff02-0000-1000-8000-00805f9b34fb'
+  ]
+});
+
     printer.device = device;
     device.addEventListener('gattserverdisconnected', () => {
       pushLog("Device disconnected");
@@ -190,6 +192,14 @@ export function canvasToBitmap(canvas, bytesPerRow, invert = false) {
       if (isBlack) out[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
     }
   }
+  return out;
+}
+
+// Optional: force invert the already-created bitmap bytes (flip bits).
+// Use this only if you know the printer ignores inverted pixels and you need to invert in software.
+export function forceInvertBitmap(u8) {
+  const out = new Uint8Array(u8.length);
+  for (let i = 0; i < u8.length; i++) out[i] = ~u8[i] & 0xFF;
   return out;
 }
 
