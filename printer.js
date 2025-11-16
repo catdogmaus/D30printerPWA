@@ -211,7 +211,13 @@ async function writeChunks(u8) {
 export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   if (!printer.characteristic) throw new Error("Not connected");
   const { canvas, bytesPerRow, heightPx } = canvasObj;
-  let bitmap = canvasToBitmap(canvas, bytesPerRow, invert);
+  let bitmap = canvasToBitmap(canvas, bytesPerRow, false);
+  // if invert checkbox OR force invert enabled -> invert bits
+  if (invert || printer.settings.forceInvert) {
+    for (let i = 0; i < bitmap.length; i++) {
+      bitmap[i] = (~bitmap[i]) & 0xFF;
+    }
+  }
   if (printer.settings.forceInvert) {
     const inv = new Uint8Array(bitmap.length);
     for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;

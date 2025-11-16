@@ -34,12 +34,13 @@ function placePreviewCanvas(sourceCanvas){
   wrap.innerHTML='';
   // scale to available width
   const maxW = Math.min(680, window.innerWidth*0.9);
-  const maxH = Math.min(350, window.innerHeight*0.45);
+  const maxH = Math.min(350, window.innerHeight*0.35);
   const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
   const cv = document.createElement('canvas');
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
   const ctx = cv.getContext('2d');
+  cv.style.maxHeight = '350px';
   ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
   cv.className = 'preview-canvas';
@@ -153,6 +154,8 @@ function setup(){
     };
     reader.readAsDataURL(f);
   });
+
+  $('imageScale')?.addEventListener('input', ()=>{ $('imageScaleLabel').textContent = $('imageScale').value + '%'; updatePreviewDebounced(); });
 
   // detect label (placeholder if not supported)
   $('detectLabelBtn')?.addEventListener('click', async ()=>{

@@ -70,7 +70,7 @@
       <div id="tab-text" class="tab-content">
         <label for="textInput" class="small">Text</label>
         <input id="textInput" value="Hello D30C" style="margin-top:8px;" />
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+        <div class="flex" style="flex-wrap:wrap; gap:12px; margin-top:12px;">
           <div>
             <label for="fontSize" class="small">Font size</label>
             <div class="row" style="margin-top:6px;">
@@ -89,7 +89,7 @@
           </div>
           <div>
             <label for="alignment" class="small">Alignment</label>
-            <select id="alignment" style="margin-top:6px;">
+            <select id="alignment" style="margin-top:6px; width:120px;">
               <option value="center">Center</option>
               <option value="left">Left</option>
               <option value="right">Right</option>
@@ -108,11 +108,17 @@
       <div id="tab-image" class="tab-content" style="display:none;">
         <label for="imageFile" class="small">Upload image</label>
         <input id="imageFile" type="file" accept="image/*" style="margin-top:8px;" />
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+        <div class="flex" style="flex-wrap:wrap; gap:12px; margin-top:12px;">
           <div>
             <label for="imageThreshold" class="small">Threshold</label>
             <input id="imageThreshold" type="range" min="0" max="255" value="128" style="width:100%;" />
             <div class="small">Threshold defines how aggressively dark areas are detected.</div>
+        <div style="margin-top:12px;">
+          <label class="small">Scale image (%)</label>
+          <input id="imageScale" type="range" min="10" max="200" value="100" style="width:100%;" />
+          <div class="small" id="imageScaleLabel">100%</div>
+        </div>
+    
           </div>
           <div>
             <label class="small">Invert</label><br>
@@ -126,7 +132,7 @@
         <label for="barcodeInput" class="small">Barcode (Code 128 recommended)</label>
         <input id="barcodeInput" value="123456789012" style="margin-top:8px;" />
         <div class="small" style="margin-top:8px;">Code 128 works in most cases.</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+        <div class="flex" style="flex-wrap:wrap; gap:12px; margin-top:12px;">
           <div>
             <label for="barcodeType" class="small">Type</label>
             <select id="barcodeType" style="margin-top:6px;">
@@ -185,6 +191,7 @@
           <div style="align-self:end">
             <label for="detectLabelBtn" class="small">Auto detect label</label><br>
             <button id="detectLabelBtn" class="btn" style="margin-top:6px;">Detect</button>
+<div class="small" style="margin-top:4px;">Auto detect is not yet implemented for this model. Placeholder only.</div>
           </div>
           <div style="grid-column:1/3; margin-top:8px;">
             <label for="fontFamily" class="small">Font family</label>
