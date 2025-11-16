@@ -1,4 +1,4 @@
-// ui.js - safe UI wiring, persistence, immediate preview update
+// ui.js - patched UI wiring and imageScale integration
 
 import {
   printer,
@@ -40,10 +40,10 @@ function placePreviewCanvas(sourceCanvas){
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
   const ctx = cv.getContext('2d');
-  cv.style.maxHeight = '350px';
   ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
   cv.className = 'preview-canvas';
+  cv.style.maxHeight = '350px';
   wrap.appendChild(cv);
 }
 
@@ -76,7 +76,8 @@ async function updatePreview(){
         const img = new Image();
         img.onload = ()=>{
           const invert = $('imageInvert').checked;
-          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi);
+          const scaleFactor = Number($('imageScale')?.value || 100) / 100;
+          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, scaleFactor);
           const p = makePreviewFromPrintCanvas(obj2.canvas);
           placePreviewCanvas(p);
         };
@@ -142,6 +143,7 @@ function setup(){
         const heightPx = Math.round(labelH * dpi);
         const bytesPerRow = Math.ceil(widthPx / 8);
         const alignedW = bytesPerRow * 8;
+        // create a canvas sized to fit label area (rotation-aware)
         const c = document.createElement('canvas'); c.width = alignedW; c.height = heightPx;
         const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,c.width,c.height);
         const ratio = Math.min(c.width / img.width, c.height / img.height);
@@ -155,7 +157,11 @@ function setup(){
     reader.readAsDataURL(f);
   });
 
-  $('imageScale')?.addEventListener('input', ()=>{ $('imageScaleLabel').textContent = $('imageScale').value + '%'; updatePreviewDebounced(); });
+  // imageScale control
+  $('imageScale')?.addEventListener('input', ()=>{
+    $('imageScaleLabel').textContent = $('imageScale').value + '%';
+    updatePreviewDebounced();
+  });
 
   // detect label (placeholder if not supported)
   $('detectLabelBtn')?.addEventListener('click', async ()=>{
@@ -180,7 +186,11 @@ function setup(){
         await printCanvasObject(obj, copies, $('invertInput').checked);
       } else if (shown === 'tab-image'){
         const dataURL = $('imagePreview')?.dataset?.canvas; if(!dataURL) return alert('Please upload an image');
-        const img = new Image(); img.onload = async ()=>{ const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi); await printCanvasObject(obj, copies, $('imageInvert').checked); }; img.src = dataURL;
+        const img = new Image(); img.onload = async ()=>{ 
+          const scaleFactor = Number($('imageScale')?.value || 100) / 100;
+          const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, scaleFactor);
+          await printCanvasObject(obj, copies, $('imageInvert').checked);
+        }; img.src = dataURL;
       } else if (shown === 'tab-barcode'){
         const obj = renderBarcodeCanvas($('barcodeInput').value||'', $('barcodeType').value||'CODE128', Number($('barcodeScale').value||2), labelW, labelH, dpi);
         await printCanvasObject(obj, copies, false);
@@ -192,7 +202,7 @@ function setup(){
   });
 
   // initial restore of simple settings
-  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
+  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','copiesInput','imageScale'].forEach(k=>{
     const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el){ if(el.type==='checkbox') el.checked = !!v; else el.value = v; } }
   });
   ['invertInput','imageInvert','fontBold','forceInvert'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
