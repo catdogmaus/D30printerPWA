@@ -1,5 +1,4 @@
-// printer.js - minimal changes to enable imageScale and software invert before sending
-
+// printer.js - safe printer module for D30 printing
 export const printer = {
   device: null,
   server: null,
@@ -16,15 +15,15 @@ export const printer = {
   logs: []
 };
 
-function pushLog(msg){
+function pushLog(msg) {
   printer.logs.push(msg);
   console.log(msg);
   const la = document.getElementById('logArea');
-  if(la){ la.value += `[${new Date().toLocaleTimeString()}] ${msg}\n`; la.scrollTop = la.scrollHeight; }
+  if (la) { la.value += `[${new Date().toLocaleTimeString()}] ${msg}\n`; la.scrollTop = la.scrollHeight; }
 }
 
-export async function connect(){
-  try{
+export async function connect() {
+  try {
     pushLog("Requesting Bluetooth device...");
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
@@ -35,33 +34,39 @@ export async function connect(){
       ]
     });
     printer.device = device;
-    device.addEventListener('gattserverdisconnected', ()=>{ pushLog("Device disconnected"); printer.connected=false; printer.characteristic=null; updateConnUI(false); });
+    device.addEventListener('gattserverdisconnected', () => {
+      pushLog("Device disconnected");
+      printer.connected = false;
+      printer.characteristic = null;
+      updateConnUI(false);
+    });
     printer.server = await device.gatt.connect();
     pushLog("GATT connected");
+    // find writable characteristic
     const services = await printer.server.getPrimaryServices();
-    for(const s of services){
-      try{
+    for (const s of services) {
+      try {
         const chars = await s.getCharacteristics();
-        for(const c of chars){
-          if(c.properties.write || c.properties.writeWithoutResponse){
+        for (const c of chars) {
+          if (c.properties.write || c.properties.writeWithoutResponse) {
             printer.characteristic = c;
             printer.connected = true;
-            pushLog(`Using characteristic ${c.uuid} (write:${c.properties.write}, wowr:${c.properties.writeWithoutResponse})`);
+            pushLog(`Using characteristic ${c.uuid} (write:${c.properties.write})`);
             updateConnUI(true);
             return;
           }
         }
-      }catch(e){}
+      } catch(e) {}
     }
     pushLog("No writable characteristic found");
-  }catch(e){
+  } catch (e) {
     pushLog("Connect failed: " + e);
     updateConnUI(false);
   }
 }
 
-export async function disconnect(){
-  if(printer.device && printer.device.gatt && printer.device.gatt.connected){
+export async function disconnect() {
+  if (printer.device && printer.device.gatt && printer.device.gatt.connected) {
     printer.device.gatt.disconnect();
     printer.connected = false;
     printer.characteristic = null;
@@ -70,15 +75,15 @@ export async function disconnect(){
   }
 }
 
-function updateConnUI(connected){
+function updateConnUI(connected) {
   const el = document.getElementById("connectionStatus");
-  if(el) el.textContent = connected ? "Connected" : "Not connected";
+  if (el) el.textContent = connected ? "Connected" : "Not connected";
   const btn = document.getElementById("connectBtn");
-  if(btn) btn.textContent = connected ? "Disconnect" : "Connect";
+  if (btn) btn.textContent = connected ? "Disconnect" : "Connect";
 }
 
-// helpers: create canvas sized to label; rotate so drawing is along the length of the label
-export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false){
+// canvas utilities
+export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) {
   const widthPx = Math.round(labelWidthMM * dpi);
   const heightPx = Math.round(labelLengthMM * dpi);
   const bytesPerRow = Math.ceil(widthPx / 8);
@@ -88,100 +93,98 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false){
   canvas.height = heightPx;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = invert ? "#000000" : "#FFFFFF";
-  ctx.fillRect(0,0,canvas.width, canvas.height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif'){
+export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   ctx.save();
+  // rotate so text prints along label (vertical label) — rotate -90deg and draw text horizontally
   ctx.translate(0, canvas.height);
-  ctx.rotate(-Math.PI/2);
+  ctx.rotate(-Math.PI / 2);
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
-  const bold = fontFamily.includes('bold') ? 'bold ' : '';
-  const ff = fontFamily.replace('bold','').trim();
-  ctx.font = `${bold}${fontSize}px ${ff}`;
+  // allow bold included in fontFamily string if present like "bold Inter, sans-serif"
+  ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
   ctx.textAlign = alignment;
   ctx.textBaseline = "middle";
-  let x = heightPx/2;
-  if(alignment === 'left') x = 10;
-  if(alignment === 'right') x = heightPx - 10;
-  ctx.fillText(text, x, widthPx/2);
+  let x = heightPx / 2;
+  if (alignment === 'left') x = 10;
+  if (alignment === 'right') x = heightPx - 10;
+  ctx.fillText(text, x, widthPx / 2);
   ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// image scaleFactor applied
-export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, scaleFactor=1){
+export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
-  const dw = image.width * ratio * scaleFactor;
-  const dh = image.height * ratio * scaleFactor;
+  const dw = image.width * ratio;
+  const dh = image.height * ratio;
   ctx.save();
   ctx.translate(0, canvas.height);
-  ctx.rotate(-Math.PI/2);
+  ctx.rotate(-Math.PI / 2);
   ctx.drawImage(image, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-export function renderBarcodeCanvas(value, type='CODE128', scale=2, labelWidthMM=12, labelLengthMM=40, dpi=8){
+export function renderBarcodeCanvas(value, type='CODE128', scale=2, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const bcCanvas = document.createElement('canvas');
-  try{
-    JsBarcode(bcCanvas, value, { format: type, displayValue: false, width: scale, margin:0 });
+  try {
+    JsBarcode(bcCanvas, value, { format: type, displayValue: false, width: scale, margin: 0 });
     const ratio = Math.min(heightPx / bcCanvas.width, widthPx / bcCanvas.height);
     const dw = bcCanvas.width * ratio;
     const dh = bcCanvas.height * ratio;
     ctx.save();
     ctx.translate(0, heightPx);
-    ctx.rotate(-Math.PI/2);
+    ctx.rotate(-Math.PI / 2);
     ctx.drawImage(bcCanvas, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
     ctx.restore();
-  }catch(e){
+  } catch (e) {
     pushLog("Barcode render error: " + e);
   }
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-export async function renderQRCanvas(value, size=256, labelWidthMM=12, labelLengthMM=40, dpi=8){
+export async function renderQRCanvas(value, size=256, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const qrCanvas = document.createElement('canvas');
-  // QRCode library (in index.html) provides QRCode.toCanvas
   await QRCode.toCanvas(qrCanvas, value, { width: Math.min(size, 512) });
   const ratio = Math.min(heightPx / qrCanvas.width, widthPx / qrCanvas.height);
   const dw = qrCanvas.width * ratio;
   const dh = qrCanvas.height * ratio;
   ctx.save();
   ctx.translate(0, heightPx);
-  ctx.rotate(-Math.PI/2);
+  ctx.rotate(-Math.PI / 2);
   ctx.drawImage(qrCanvas, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-export function canvasToBitmap(canvas, bytesPerRow, invert=false){
+export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
-  const img = ctx.getImageData(0,0,w,h).data;
+  const img = ctx.getImageData(0, 0, w, h).data;
   const out = new Uint8Array(bytesPerRow * h);
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      const idx = (y*w + x) * 4;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = (y * w + x) * 4;
       const r = img[idx];
       let isBlack = r < 128;
-      if(invert) isBlack = !isBlack;
-      if(isBlack) out[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
+      if (invert) isBlack = !isBlack;
+      if (isBlack) out[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
     }
   }
   return out;
 }
 
-export function buildPacketFromBitmap(bitmap, bytesPerRow, heightPx){
-  const reset = new Uint8Array([0x1B,0x40]);
-  const header = new Uint8Array([0x1D,0x76,0x30,0x00, bytesPerRow & 0xff, (bytesPerRow>>8)&0xff, heightPx & 0xff, (heightPx>>8)&0xff]);
-  const footer = new Uint8Array([0x1B,0x64,0x00]);
+export function buildPacketFromBitmap(bitmap, bytesPerRow, heightPx) {
+  const reset = new Uint8Array([0x1B, 0x40]);
+  const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff, heightPx & 0xff, (heightPx >> 8) & 0xff]);
+  const footer = new Uint8Array([0x1B, 0x64, 0x00]);
   const out = new Uint8Array(reset.length + header.length + bitmap.length + footer.length);
   let p = 0;
   out.set(reset, p); p += reset.length;
@@ -191,84 +194,75 @@ export function buildPacketFromBitmap(bitmap, bytesPerRow, heightPx){
   return out;
 }
 
-async function writeChunks(u8){
-  if(!printer.characteristic) throw new Error("Not connected");
+async function writeChunks(u8) {
+  if (!printer.characteristic) throw new Error("Not connected");
   const CHUNK = 128;
-  for(let i=0;i<u8.length;i+=CHUNK){
-    const slice = u8.slice(i, i+CHUNK);
-    try{
-      if(printer.characteristic.properties.writeWithoutResponse){
-        await printer.characteristic.writeValueWithoutResponse(slice);
-      } else {
-        await printer.characteristic.writeValue(slice);
-      }
-      pushLog(`Sent ${Math.min(i+CHUNK, u8.length)}/${u8.length}`);
-    }catch(err){
-      pushLog("Write error: " + err);
-      throw err;
+  for (let i = 0; i < u8.length; i += CHUNK) {
+    const slice = u8.slice(i, i + CHUNK);
+    if (printer.characteristic.properties.write) {
+      await printer.characteristic.writeValue(slice);
+    } else {
+      await printer.characteristic.writeValueWithoutResponse(slice);
     }
     await new Promise(r => setTimeout(r, 20));
   }
 }
 
-export async function printCanvasObject(canvasObj, copies = 1, invert = false){
-  if(!printer.characteristic) throw new Error("Not connected");
+export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
+  if (!printer.characteristic) throw new Error("Not connected");
   const { canvas, bytesPerRow, heightPx } = canvasObj;
-  // create bitmap without invert, then flip bits if requested
-  let bitmap = canvasToBitmap(canvas, bytesPerRow, false);
-
-  if(invert || printer.settings.forceInvert){
-    pushLog("Applying software invert to bitmap");
-    for(let i=0;i<bitmap.length;i++) bitmap[i] = (~bitmap[i]) & 0xFF;
+  let bitmap = canvasToBitmap(canvas, bytesPerRow, invert);
+  if (printer.settings.forceInvert) {
+    const inv = new Uint8Array(bitmap.length);
+    for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;
+    bitmap = inv;
   }
-
   const packet = buildPacketFromBitmap(bitmap, bytesPerRow, heightPx);
-  pushLog("Packet head: " + Array.from(packet.slice(0,16)).map(b=>b.toString(16).padStart(2,'0')).join(' '));
-  for(let j=0;j<copies;j++){
+  for (let i = 0; i < copies; i++) {
     await writeChunks(packet);
-    await new Promise(r=>setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 300));
   }
   pushLog("Printing done");
 }
 
-export function makePreviewFromPrintCanvas(printCanvas){
+export function makePreviewFromPrintCanvas(printCanvas) {
   const src = printCanvas;
   const preview = document.createElement('canvas');
   preview.width = src.height;
   preview.height = src.width;
   const ctx = preview.getContext('2d');
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0,0,preview.width, preview.height);
+  ctx.fillRect(0, 0, preview.width, preview.height);
   ctx.save();
   ctx.translate(preview.width, 0);
-  ctx.rotate(Math.PI/2);
+  ctx.rotate(Math.PI / 2);
   ctx.drawImage(src, 0, 0);
   ctx.restore();
   return preview;
 }
 
-export async function detectLabel(){
-  if(!printer.server) throw new Error("Not connected");
-  try{
+export async function detectLabel() {
+  if (!printer.server) throw new Error("Not connected");
+  try {
     const svcs = await printer.server.getPrimaryServices();
-    for(const s of svcs){
-      try{
+    for (const s of svcs) {
+      try {
         const chars = await s.getCharacteristics();
-        for(const c of chars){
-          try{
+        for (const c of chars) {
+          try {
             const v = await c.readValue();
-            if(v && v.byteLength >= 1){
+            if (v && v.byteLength >= 1) {
               const b0 = v.getUint8(0);
-              if(b0 >= 8 && b0 <= 60){
+              if (b0 >= 8 && b0 <= 60) {
                 printer.settings.labelWidthMM = b0;
                 pushLog("Detected label width mm: " + b0);
                 return b0;
               }
             }
-          }catch(e){}
+          } catch (e) {}
         }
-      }catch(e){}
+      } catch (e) {}
     }
-  }catch(e){}
+  } catch (e) {}
   return null;
 }
