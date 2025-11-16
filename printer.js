@@ -1,4 +1,4 @@
-// printer.js - safe printer module for D30 printing
+// printer.js - patched: better chunking, debug logs, image scale support, robust invert
 export const printer = {
   device: null,
   server: null,
@@ -51,12 +51,12 @@ export async function connect() {
           if (c.properties.write || c.properties.writeWithoutResponse) {
             printer.characteristic = c;
             printer.connected = true;
-            pushLog(`Using characteristic ${c.uuid} (write:${c.properties.write})`);
+            pushLog(`Using characteristic ${c.uuid} (write:${c.properties.write}, wowr:${c.properties.writeWithoutResponse})`);
             updateConnUI(true);
             return;
           }
         }
-      } catch(e) {}
+      } catch(e) { /* ignore individual service errors */ }
     }
     pushLog("No writable characteristic found");
   } catch (e) {
@@ -82,7 +82,7 @@ function updateConnUI(connected) {
   if (btn) btn.textContent = connected ? "Disconnect" : "Connect";
 }
 
-// canvas utilities
+// Canvas helpers
 export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) {
   const widthPx = Math.round(labelWidthMM * dpi);
   const heightPx = Math.round(labelLengthMM * dpi);
@@ -100,12 +100,13 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
 export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   ctx.save();
-  // rotate so text prints along label (vertical label) — rotate -90deg and draw text horizontally
   ctx.translate(0, canvas.height);
-  ctx.rotate(-Math.PI / 2);
+  ctx.rotate(-Math.PI / 2); // rotate -90deg so text runs along label
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
-  // allow bold included in fontFamily string if present like "bold Inter, sans-serif"
-  ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
+  // if fontFamily string contains "bold" we'll include it
+  const bold = fontFamily.includes('bold') ? 'bold ' : '';
+  const ff = fontFamily.replace('bold','').trim();
+  ctx.font = `${bold}${fontSize}px ${ff}`;
   ctx.textAlign = alignment;
   ctx.textBaseline = "middle";
   let x = heightPx / 2;
@@ -116,11 +117,12 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8) {
+// scaleFactor is applied to drawn image (1.0 = natural)
+export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, scaleFactor=1) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
-  const dw = image.width * ratio;
-  const dh = image.height * ratio;
+  const dw = image.width * ratio * scaleFactor;
+  const dh = image.height * ratio * scaleFactor;
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
@@ -182,6 +184,7 @@ export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
 }
 
 export function buildPacketFromBitmap(bitmap, bytesPerRow, heightPx) {
+  // ESC/POS raster-like packet used previously
   const reset = new Uint8Array([0x1B, 0x40]);
   const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff, heightPx & 0xff, (heightPx >> 8) & 0xff]);
   const footer = new Uint8Array([0x1B, 0x64, 0x00]);
@@ -196,36 +199,41 @@ export function buildPacketFromBitmap(bitmap, bytesPerRow, heightPx) {
 
 async function writeChunks(u8) {
   if (!printer.characteristic) throw new Error("Not connected");
-  const CHUNK = 128;
+  const CHUNK = 64;           // smaller chunk size to improve reliability
+  const PAUSE_MS = 60;        // longer pause to let device process
   for (let i = 0; i < u8.length; i += CHUNK) {
     const slice = u8.slice(i, i + CHUNK);
-    if (printer.characteristic.properties.write) {
-      await printer.characteristic.writeValue(slice);
-    } else {
-      await printer.characteristic.writeValueWithoutResponse(slice);
+    try {
+      if (printer.characteristic.properties.writeWithoutResponse) {
+        await printer.characteristic.writeValueWithoutResponse(slice);
+      } else {
+        await printer.characteristic.writeValue(slice);
+      }
+      pushLog(`Sent ${Math.min(i+CHUNK, u8.length)}/${u8.length}`);
+    } catch (err) {
+      pushLog("Write error: " + err);
+      throw err;
     }
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, PAUSE_MS));
   }
 }
 
 export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   if (!printer.characteristic) throw new Error("Not connected");
   const { canvas, bytesPerRow, heightPx } = canvasObj;
+  // create bitmap without software invert first
   let bitmap = canvasToBitmap(canvas, bytesPerRow, false);
-  // if invert checkbox OR force invert enabled -> invert bits
+  // if invert requested or forceInvert setting -> flip bits
   if (invert || printer.settings.forceInvert) {
-    for (let i = 0; i < bitmap.length; i++) {
-      bitmap[i] = (~bitmap[i]) & 0xFF;
-    }
-  }
-  if (printer.settings.forceInvert) {
-    const inv = new Uint8Array(bitmap.length);
-    for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;
-    bitmap = inv;
+    pushLog("Applying software invert to bitmap before sending");
+    for (let i = 0; i < bitmap.length; i++) bitmap[i] = (~bitmap[i]) & 0xFF;
   }
   const packet = buildPacketFromBitmap(bitmap, bytesPerRow, heightPx);
+  // log packet head for debug
+  pushLog("Packet head: " + Array.from(packet.slice(0, 16)).map(b => b.toString(16).padStart(2,'0')).join(' '));
   for (let i = 0; i < copies; i++) {
     await writeChunks(packet);
+    // small post-job pause
     await new Promise(r => setTimeout(r, 300));
   }
   pushLog("Printing done");
