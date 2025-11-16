@@ -1,60 +1,318 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>D30 Printer PWA</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>D30 Printer</title>
 
-  <!-- tailwind / styling (left as-is from your repo) -->
-  <link href="styles/tailwind.css" rel="stylesheet">
+<!-- Tailwind (dev CDN version, OK for now) -->
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <style>
-    /* small local safety styles (preserve your original look) */
-    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; background:#fff; color:#111; }
-    .small{font-size:0.9rem;color:#6b7280}
-    .card{background:#fff;padding:1rem;border-radius:10px;border:1px solid #f0f4f8}
-    #previewCanvasWrap{display:flex;align-items:center;justify-content:center;width:100%}
-    .preview-canvas{display:block;width:100%;height:auto;max-width:680px;border-radius:8px;border:1px solid #E6E9EE;background:white}
-    .floating-print{position:fixed;right:20px;bottom:24px}
-    label.inline{display:inline-flex;align-items:center;gap:6px}
-  </style>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-256.png" />
+
+<script>
+window.isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+</script>
+
+<style>
+  body {
+    background:#f5f5f5;
+  }
+  #previewBox {
+    border:2px solid #ccc;
+    border-radius:8px;
+    background:white;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:hidden;
+    margin-bottom:12px;
+  }
+  #previewCanvasWrap {
+    width:100%;
+    display:flex;
+    justify-content:center;
+  }
+  #previewCanvas {
+    max-height:200px;
+    image-rendering: pixelated;
+  }
+  .tab-button {
+    @apply px-2 py-1 rounded cursor-pointer text-sm;
+  }
+  .tab-button.active {
+    @apply bg-blue-600 text-white;
+  }
+  .row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
+  .row > * {
+    flex:0 1 auto;
+  }
+  .checkbox-inline {
+    display:flex;
+    align-items:center;
+    gap:4px;
+    white-space:nowrap;
+  }
+</style>
+
+<!-- QRCode library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
-<body>
-  <header class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div style="display:flex;gap:12px;align-items:center">
-      <img src="icons/icon-256.png" alt="logo" style="width:44px;height:44px;border-radius:8px">
-      <div>
-        <div style="font-weight:600;font-size:18px">D30 Printer</div>
-        <div class="small">Phomemo D30C — Web PWA</div>
+
+<body class="text-gray-800">
+<div class="max-w-4xl mx-auto p-4">
+
+  <!-- HEADER -->
+  <div class="flex justify-between items-center mb-3">
+    <h1 class="text-xl font-bold">D30 Printer</h1>
+    <button id="connectBtn" class="bg-blue-600 text-white px-3 py-1 rounded">
+      Connect
+    </button>
+  </div>
+
+  <!-- PREVIEW TOP -->
+  <div id="previewBox" style="height:220px;">
+    <div id="previewCanvasWrap">
+      <canvas id="previewCanvas"></canvas>
+    </div>
+  </div>
+  <div class="text-xs text-gray-500 mb-3">
+    Preview shown in label proportions. Change label size in Settings.
+  </div>
+
+  <!-- TABS -->
+  <div class="flex gap-2 border-b pb-2 mb-3">
+    <div class="tab-button active" data-tab="text">Text</div>
+    <div class="tab-button" data-tab="image">Image</div>
+    <div class="tab-button" data-tab="barcode">Barcode</div>
+    <div class="tab-button" data-tab="qr">QR</div>
+    <div class="tab-button" data-tab="settings">Settings</div>
+    <div class="tab-button" data-tab="logs">Logs</div>
+  </div>
+
+  <!-- TAB CONTENT -->
+  <div id="tab-content">
+    
+    <!-- TEXT TAB -->
+    <div id="tab-text" class="tab active">
+      <textarea id="textInput" class="w-full border p-2 rounded" rows="4"
+        placeholder="Enter label text"></textarea>
+
+      <!-- First row (aligned correctly now) -->
+      <div class="row mt-2">
+        <label class="text-sm">Alignment:</label>
+        <select id="alignment" class="border rounded p-1">
+          <option value="left">Left</option>
+          <option value="center" selected>Center</option>
+          <option value="right">Right</option>
+        </select>
+
+        <label class="text-sm ml-4">Copies:</label>
+        <input id="copiesInput" type="number" min="1" value="1"
+          class="border rounded p-1 w-16" />
       </div>
-    </div>
 
-    <div style="display:flex;gap:12px;align-items:center">
-      <div id="connectionStatus" class="small">Not connected</div>
-      <button id="connectBtn" style="padding:8px 12px;border-radius:8px;background:#0ea5e9;color:white;border:none;cursor:pointer">Connect</button>
-    </div>
-  </header>
+      <!-- Second row -->
+      <div class="row mt-3">
+        <label class="text-sm">Font size:</label>
+        <div class="flex gap-1">
+          <button class="px-2 py-1 border rounded" id="fontMinus">-</button>
+          <span id="fontSizeDisplay" class="px-2">24</span>
+          <button class="px-2 py-1 border rounded" id="fontPlus">+</button>
+        </div>
 
-  <main style="max-width:1100px;margin:20px auto;padding:0 16px;">
-    <!-- Shared Preview -->
-    <div id="previewRoot" style="margin-bottom:12px">
-      <div class="card" style="padding:18px;">
-        <div id="previewCanvasWrap"></div>
+        <label class="ml-4 text-sm">Font:</label>
+        <select id="fontFamily" class="border rounded p-1">
+          <option value="sans-serif">Sans</option>
+          <option value="serif">Serif</option>
+          <option value="monospace">Mono</option>
+        </select>
       </div>
-      <div id="previewHint" class="small" style="margin-top:8px;text-align:center">Preview shown in label proportions. Change label size in Settings.</div>
+
+      <div class="row mt-3">
+        <label class="checkbox-inline">
+          <input id="invertInput" type="checkbox" /> Invert
+        </label>
+      </div>
+
+      <button id="printTextBtn"
+        class="bg-green-600 text-white px-4 py-2 rounded mt-4 w-full">
+        Print
+      </button>
+    </div>
+    <!-- IMAGE TAB -->
+    <div id="tab-image" class="tab hidden">
+      <input id="imageInput" type="file" accept="image/*"
+        class="border p-2 w-full" />
+
+      <div class="row mt-3">
+        <label class="text-sm">Scale image (%):</label>
+        <input id="imageScale" type="range" min="10" max="400" value="100"
+          class="w-40" />
+        <span id="imageScaleVal" class="text-sm">100%</span>
+      </div>
+
+      <div class="row mt-3">
+        <label class="checkbox-inline">
+          <input id="invertImage" type="checkbox" /> Invert
+        </label>
+      </div>
+
+      <button id="printImageBtn"
+        class="bg-green-600 text-white px-4 py-2 rounded mt-4 w-full">
+        Print
+      </button>
     </div>
 
-    <!-- Tabs (left minimal; keep your structure) -->
-    <!-- ... your existing tab HTML here ... -->
-    <!-- I intentionally did NOT change the rest of the UI markup. Keep your current index structure. -->
+    <!-- BARCODE TAB -->
+    <div id="tab-barcode" class="tab hidden">
+      <input id="barcodeInput" type="text"
+        class="w-full border p-2 rounded" placeholder="Barcode text" />
 
-    <!-- Include QR and barcode libraries (required for preview) -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+      <!-- Barcode type + scale (correct alignment now) -->
+      <div class="row mt-3">
+        <label class="text-sm">Type:</label>
+        <select id="barcodeType" class="border rounded p-1">
+          <option value="code128" selected>Code 128 (recommended)</option>
+          <option value="ean13">EAN-13</option>
+          <option value="code39">Code 39</option>
+        </select>
 
-    <!-- Your app scripts (unchanged) -->
-    <script type="module" src="printer.js"></script>
-    <script type="module" src="ui.js"></script>
+        <label class="text-sm ml-4">Scale:</label>
+        <select id="barcodeScale" class="border rounded p-1 w-24">
+          <option value="1">1x</option>
+          <option value="2" selected>2x</option>
+          <option value="3">3x</option>
+        </select>
+      </div>
+
+      <div class="row mt-3">
+        <label class="checkbox-inline">
+          <input id="invertBarcode" type="checkbox" /> Invert
+        </label>
+      </div>
+
+      <button id="printBarcodeBtn"
+        class="bg-green-600 text-white px-4 py-2 rounded mt-4 w-full">
+        Print
+      </button>
+    </div>
+
+    <!-- QR TAB -->
+    <div id="tab-qr" class="tab hidden">
+      <textarea id="qrInput" class="w-full border p-2 rounded" rows="4"
+        placeholder="Enter QR contents"></textarea>
+
+      <div class="row mt-3">
+        <label class="text-sm">Error correction:</label>
+        <select id="qrEc" class="border rounded p-1">
+          <option value="L">L (7%)</option>
+          <option value="M" selected>M (15%)</option>
+          <option value="Q">Q (25%)</option>
+          <option value="H">H (30%)</option>
+        </select>
+
+        <label class="ml-4 text-sm">Size (px):</label>
+        <input id="qrSize" type="number" min="64" max="800" value="256"
+          class="border rounded p-1 w-24" />
+      </div>
+
+      <div class="row mt-3">
+        <label class="checkbox-inline">
+          <input id="invertQR" type="checkbox" /> Invert
+        </label>
+      </div>
+
+      <button id="printQRBtn"
+        class="bg-green-600 text-white px-4 py-2 rounded mt-4 w-full">
+        Print
+      </button>
+    </div>
+    <!-- SETTINGS TAB -->
+    <div id="tab-settings" class="tab hidden">
+
+      <h3 class="font-bold mb-2">Label Size</h3>
+      <div class="row mb-4">
+        <label class="text-sm">Width (mm):</label>
+        <input id="labelWidth" type="number" class="border rounded p-1 w-20 ml-2" />
+        <label class="text-sm ml-4">Length (mm):</label>
+        <input id="labelLength" type="number" class="border rounded p-1 w-20 ml-2" />
+      </div>
+
+      <small class="text-gray-500 block mb-4">
+        Auto detect label size is not implemented yet.
+      </small>
+
+      <h3 class="font-bold mb-2">Font</h3>
+      <div class="row mb-4">
+        <label class="text-sm">Family:</label>
+        <select id="fontFamily" class="border rounded p-1 ml-2">
+          <option value="arial">Arial</option>
+          <option value="sans-serif" selected>Sans</option>
+          <option value="serif">Serif</option>
+          <option value="monospace">Mono</option>
+        </select>
+
+        <label class="ml-4 text-sm">Weight:</label>
+        <select id="fontWeight" class="border rounded p-1 ml-2">
+          <option value="normal" selected>Regular</option>
+          <option value="bold">Bold</option>
+        </select>
+      </div>
+
+      <h3 class="font-bold mb-2">Printer</h3>
+      <div class="row mb-4">
+        <label class="text-sm">Protocol:</label>
+        <select id="protocolSelect" class="border rounded p-1 ml-2">
+          <option value="d30">D30 (default)</option>
+          <option value="d11">D11</option>
+          <option value="d101">D101</option>
+          <option value="m110">M110</option>
+          <option value="raw">Raw / Unknown</option>
+        </select>
+      </div>
+
+      <div class="row mb-3">
+        <label class="checkbox-inline">
+          <input id="forceInvert" type="checkbox" /> Force bitmap invert
+        </label>
+      </div>
+
+      <h3 class="font-bold mb-2">Connection</h3>
+      <button id="connectBtn"
+        class="bg-blue-600 text-white px-4 py-2 rounded w-full">
+        Connect / Disconnect
+      </button>
+
+    </div>
+
+    <!-- LOGS TAB -->
+    <div id="tab-logs" class="tab hidden">
+      <pre id="log" class="bg-gray-100 border rounded p-2 text-xs overflow-auto h-64"></pre>
+    </div>
+
+    <!-- Floating Print Button -->
+    <button id="floatingPrint"
+      class="print-btn hidden shadow-lg">
+      🖨️
+    </button>
   </main>
+
+  <!-- SCRIPTS -->
+  <script src="qrcode.min.js"></script>
+  <script src="jsbarcode.min.js"></script>
+  <script type="module" src="printer.js"></script>
+  <script type="module" src="ui.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
 </body>
 </html>
