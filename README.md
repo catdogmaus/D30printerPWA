@@ -15,7 +15,7 @@ For you mobile device to open page use
 ![QR](icons/qrcode_catdogmaus.github.io.png)  
 
 #### What could go wrong?
-Dont tell me about errors, there are lots of little ones, I need some time to iron them out.  
+Dont tell me about errors yet, there are lots of little ones, I need some time to iron them out.  Unfortunately only way to test it is in the page here so sometimes it could get worse before it gets better.
 Bluetooth permissions. It is tested only in my device. 
 I tried to make the app as universal as possible. Unfortunately, different versions of Phomemo devices use different protocols to connect to the printer. In settings you can try to switch between Phomemo and legacy methods. I don't have any way to test devices other than mine, so if it doesn't work for you, you're out of luck.  
 If anyone discovers that this app works with a model other than the D30, it would be great if you could let us know here so I can pass this information on to others.   
