@@ -170,14 +170,13 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
-export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false, rotation=0) {
+export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false, rotation=0, scalePct=100) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
   // 1. Handle User Rotation (Intermediate Step)
   let srcImage = image;
   if (rotation !== 0) {
      const rotCanvas = document.createElement('canvas');
-     // Swap dimensions for 90/270
      if (rotation % 180 !== 0) {
        rotCanvas.width = image.height;
        rotCanvas.height = image.width;
@@ -186,7 +185,6 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
        rotCanvas.height = image.height;
      }
      const rctx = rotCanvas.getContext('2d');
-     // Move origin to center, rotate, draw image centered
      rctx.translate(rotCanvas.width/2, rotCanvas.height/2);
      rctx.rotate(rotation * Math.PI / 180);
      rctx.drawImage(image, -image.width/2, -image.height/2);
@@ -194,13 +192,20 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
   }
 
   // 2. Draw image scaled
-  const ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
+  // Calculate base ratio to fit image
+  let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
+  
+  // Apply user scale percentage
+  ratio *= (scalePct / 100);
+
   const dw = srcImage.width * ratio;
   const dh = srcImage.height * ratio;
   
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
+  // Draw image centered
+  // Since dw/dh might be larger than heightPx/widthPx (if zoomed), this will simply crop the overflow.
   ctx.drawImage(srcImage, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
 
