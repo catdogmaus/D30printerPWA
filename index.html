@@ -203,54 +203,64 @@
       <div id="tab-settings" class="tab-content" style="display:none;">
         <h4 class="small" style="margin-bottom:12px; font-weight:600;">Printer & Label Configuration</h4>
         
-        <div class="control-group">
-          <!-- Dimensions -->
-          <div class="control-block" style="display:flex; gap:12px;">
-            <div>
-              <label for="labelWidth" class="small">Width (mm)</label>
-              <input id="labelWidth" type="number" value="12" min="8" max="60" />
+        <!-- Vertical Group Layout for Settings -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          
+          <!-- Row 1: Dimensions -->
+          <div style="width:100%;">
+             <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+               <div style="flex:1; min-width:110px;">
+                 <label for="labelWidth" class="small">Width (mm)</label>
+                 <input id="labelWidth" type="number" value="12" min="8" max="60" />
+               </div>
+               <div style="flex:1; min-width:110px;">
+                 <label for="labelLength" class="small">Length (mm)</label>
+                 <input id="labelLength" type="number" value="40" min="10" max="400" />
+               </div>
+               <div style="flex:1; min-width:140px;">
+                  <!-- Invisible label spacer to align button with inputs -->
+                  <label class="small" style="visibility:hidden">Detect</label>
+                  <!-- Padding 0.6rem matches input styles. Border added to match input border size exactly. -->
+                  <button id="detectLabelBtn" class="btn" style="width:100%; padding:0.6rem; border:1px solid transparent; background:#64748b; font-size:0.9rem; white-space:nowrap;" title="This feature is currently not implemented">Auto Detect (N/A)</button>
+               </div>
+             </div>
+          </div>
+
+          <!-- Row 2: Font & Protocol -->
+          <div style="display:flex; flex-wrap:wrap; gap:16px; width:100%;">
+            
+            <!-- Font Family -->
+            <div style="flex:1 1 280px;">
+              <label for="fontFamily" class="small">Font family</label>
+              <select id="fontFamily">
+                <option value="Inter, sans-serif">Inter (default)</option>
+                <option value="sans-serif">System Sans</option>
+                <option value="serif">Serif</option>
+                <option value="monospace">Monospace</option>
+                <option value="Roboto, sans-serif">Roboto</option>
+              </select>
             </div>
-            <div>
-              <label for="labelLength" class="small">Length (mm)</label>
-              <input id="labelLength" type="number" value="40" min="10" max="400" />
-            </div>
-            <div style="display:flex; align-items:flex-end;">
-               <button id="detectLabelBtn" class="btn" style="background:#64748b; font-size:0.8rem;" title="This feature is currently not implemented">Auto Detect (Placeholder)</button>
+
+            <!-- Protocol -->
+            <div style="flex:1 1 280px;">
+              <label for="protocolSelect" class="small">Protocol</label>
+              <select id="protocolSelect">
+                <option value="phomemo_raw">Phomemo raw (D30C)</option>
+                <option value="phomemo_legacy">Phomemo (Legacy)</option>
+                <option value="escpos_raster">ESC/POS raster</option>
+                <option value="zpl">ZPL (Experimental)</option>
+              </select>
             </div>
           </div>
 
-          <!-- Protocol & Font -->
-          <div class="control-block">
-            <label for="fontFamily" class="small">Font family</label>
-            <select id="fontFamily">
-              <option value="Inter, sans-serif">Inter (default)</option>
-              <option value="sans-serif">System Sans</option>
-              <option value="serif">Serif</option>
-              <option value="monospace">Monospace</option>
-              <option value="Roboto, sans-serif">Roboto</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="control-group">
-           <!-- Protocol -->
-           <div class="control-block">
-            <label for="protocolSelect" class="small">Protocol</label>
-            <select id="protocolSelect">
-              <option value="phomemo_raw">Phomemo raw (D30C)</option>
-              <option value="phomemo_legacy">Phomemo (Legacy)</option>
-              <option value="escpos_raster">ESC/POS raster</option>
-              <option value="zpl">ZPL (Experimental)</option>
-            </select>
-           </div>
-           
-           <!-- Options -->
-           <div class="control-block" style="display:flex; align-items:center; gap:12px;">
-             <label class="row" style="cursor:pointer; margin-top:20px;">
+          <!-- Row 3: Options -->
+          <div>
+             <label class="row" style="cursor:pointer; user-select:none;">
                 <input id="forceInvert" type="checkbox">
                 <span>Force bitmap invert (Fix black prints)</span>
              </label>
-           </div>
+          </div>
+          
         </div>
       </div>
 
