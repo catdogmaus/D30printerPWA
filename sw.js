@@ -1,19 +1,43 @@
-const CACHE_NAME = "d30pwa-v1";
-const ASSETS = ["./", "./index.html", "./printer.js", "./ui.js", "./manifest.json", "./styles/tailwind.css", "./icons/icon-256.png", "./icons/icon-maskable.png", "./icons/icon-monochrome.png"];
-self.addEventListener("install", (e) => {
-  e.waitUntil((async () => {
-    const c = await caches.open(CACHE_NAME);
-    await c.addAll(ASSETS);
-  })());
+const CACHE_NAME = 'd30-pwa-v3'; // Incremented version to trigger update
+const ASSETS = [
+  './',
+  './index.html',
+  './printer.js',
+  './ui.js',
+  './manifest.json',
+  './styles/tailwind.css',
+  './icons/icon-256.png',
+  './icons/icon-maskable.png',
+  './icons/icon-monochrome.png',
+  './libs/JsBarcode.all.min.js',
+  './libs/qrcode.min.js',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap'
+];
+
+self.addEventListener('install', (e) => {
+  // Force the waiting service worker to become the active service worker.
   self.skipWaiting();
+  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
 });
-self.addEventListener("activate", (e) => {
-  e.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null));
-  })());
-  self.clients.claim();
+
+self.addEventListener('activate', (e) => {
+  // Tell the active service worker to take control of the page immediately.
+  e.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keyList) => {
+        return Promise.all(keyList.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        }));
+      })
+    ])
+  );
 });
-self.addEventListener("fetch", (e) => {
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+
+self.addEventListener('fetch', (e) => {
+  e.respondWith(
+    caches.match(e.request).then((response) => response || fetch(e.request))
+  );
 });
