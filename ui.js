@@ -20,6 +20,8 @@ function loadSetting(k,def){const v=localStorage.getItem(k); if(!v) return def; 
 
 let previewTimer=null;
 const DEBOUNCE=160;
+// Track image rotation (0, 90, 180, 270)
+let imageRotation = 0;
 
 // --- Presets Logic ---
 function updatePresetSelect() {
@@ -39,7 +41,6 @@ function saveCurrentAsPreset() {
   if (!name) return;
   const presets = loadSetting('userPresets', {});
   
-  // Capture current UI state for the Text/General settings
   presets[name] = {
     labelWidth: $('labelWidth').value,
     labelLength: $('labelLength').value,
@@ -65,7 +66,6 @@ function loadPreset(name) {
     if (p.alignment) $('alignment').value = p.alignment;
     if (p.fontBold !== undefined) $('fontBold').checked = p.fontBold;
     
-    // Trigger updates
     saveSetting('labelWidth', p.labelWidth);
     saveSetting('labelLength', p.labelLength);
     saveSetting('fontSize', p.fontSize);
@@ -142,7 +142,8 @@ async function updatePreview(){
         img.onload = ()=>{
           const invert = $('imageInvert').checked;
           const dither = $('imageDither').checked;
-          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, dither);
+          // Pass rotation here
+          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, dither, imageRotation);
           const p = makePreviewFromPrintCanvas(obj2.canvas);
           placePreviewCanvas(p);
         };
@@ -189,7 +190,6 @@ function setup(){
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=> wireSimple(k,k));
   ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
   
-  // Text input wiring (since it's now a textarea, standard wireSimple works but we ensure listener)
   $('textInput').addEventListener('input', ()=>{ saveSetting('textInput', $('textInput').value); updatePreviewDebounced(); });
   const savedText = loadSetting('textInput', null); if(savedText !== null) $('textInput').value = savedText;
 
@@ -202,6 +202,8 @@ function setup(){
     const reader = new FileReader();
     reader.onload = ()=>{
       const img = new Image(); img.onload = ()=>{
+        // Reset rotation on new image load
+        imageRotation = 0; 
         const labelW = Number($('labelWidth').value||printer.settings.labelWidthMM);
         const labelH = Number($('labelLength').value||printer.settings.labelLengthMM);
         const dpi = printer.settings.dpiPerMM || 8;
@@ -220,6 +222,12 @@ function setup(){
       img.src = reader.result;
     };
     reader.readAsDataURL(f);
+  });
+
+  // Rotation wiring
+  $('imageRotateBtn')?.addEventListener('click', ()=>{
+    imageRotation = (imageRotation + 90) % 360;
+    updatePreviewDebounced();
   });
 
   $('detectLabelBtn')?.addEventListener('click', async ()=>{
@@ -241,7 +249,8 @@ function setup(){
         const dataURL = $('imagePreview')?.dataset?.canvas; if(!dataURL) return alert('Please upload an image');
         const img = new Image(); img.onload = async ()=>{ 
            const dither = $('imageDither').checked;
-           const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, dither); 
+           // Pass rotation here too
+           const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, dither, imageRotation); 
            await printCanvasObject(obj, copies, $('imageInvert').checked); 
         }; img.src = dataURL;
       } else if (shown === 'tab-barcode'){
@@ -254,13 +263,11 @@ function setup(){
     }catch(e){ alert('Print failed: ' + e); console.error(e); }
   });
 
-  // Presets wiring
   updatePresetSelect();
   $('savePresetBtn').addEventListener('click', saveCurrentAsPreset);
   $('deletePresetBtn').addEventListener('click', deletePreset);
   $('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
 
-  // Initial restore
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
     const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el){ if(el.type==='checkbox') el.checked = !!v; else el.value = v; } }
   });
