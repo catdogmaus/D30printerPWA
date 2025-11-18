@@ -24,16 +24,17 @@
     .fab { position:fixed; right:20px; bottom:24px; width:64px; height:64px; border-radius:999px; background:#10b981; color:white; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(16,185,129,0.18); z-index: 50; }
     
     /* Input Styles */
-    input, select, textarea { padding:0.6rem; border:1px solid #e6edf3; border-radius:8px; width:100%; font-size: 1rem; }
-    /* Fix: Checkboxes should not take 100% width, otherwise they push labels away */
+    input, select, textarea { padding:0.6rem; border:1px solid #e6edf3; border-radius:8px; width:100%; font-size: 1rem; font-family: inherit; }
+    textarea { resize: vertical; min-height: 80px; }
     input[type="checkbox"] { width: auto; margin: 0; }
 
     .row { display:flex; gap:0.5rem; align-items:center; }
     button.btn { padding:6px 14px; border-radius:8px; border:none; cursor:pointer; background:#0ea5e9;color:#fff; font-weight: 500; }
+    button.btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #334155; }
     
     /* Layout Utils */
     .control-group { display:flex; flex-wrap:wrap; gap:16px; margin-top:12px; }
-    .control-block { flex: 1 1 280px; } /* Grow to fill, but wrap if < 280px */
+    .control-block { flex: 1 1 280px; }
     .control-row { display:flex; gap:12px; align-items: flex-end; }
     .control-row > div { flex:1; }
   </style>
@@ -49,6 +50,11 @@
         </div>
       </div>
       <div style="display:flex; gap:12px; align-items:center;">
+        <!-- Battery Indicator -->
+        <div id="batteryLevel" style="display:none; align-items:center; gap:4px; font-size:0.9rem; color:#64748b;">
+          <span id="battPercent">--%</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4h-1V2.5C15 2.22 14.78 2 14.5 2h-5C9.22 2 9 2.22 9 2.5V4H8C6.9 4 6 4.9 6 6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-2 10H9v-2h5v2z"/></svg>
+        </div>
         <div id="connectionStatus" class="small" style="margin:0;">Not connected</div>
         <button id="connectBtn" class="btn">Connect</button>
       </div>
@@ -81,8 +87,8 @@
       
       <!-- TEXT TAB -->
       <div id="tab-text" class="tab-content">
-        <label for="textInput" class="small">Text</label>
-        <input id="textInput" value="Hello D30C" />
+        <label for="textInput" class="small">Text (Multi-line supported)</label>
+        <textarea id="textInput" placeholder="Enter text here...">Hello D30C</textarea>
         
         <div class="control-group">
           <!-- Left Block: Font -->
@@ -139,7 +145,10 @@
             <label for="imageThreshold" class="small">Threshold (Darkness detection)</label>
             <input id="imageThreshold" type="range" min="0" max="255" value="128" style="width:100%;" />
           </div>
-          <div class="control-block" style="display:flex; align-items:center;">
+          <div class="control-block" style="display:flex; flex-direction: column; justify-content: center; gap:8px;">
+             <label class="row" style="cursor:pointer; user-select:none;">
+               <input id="imageDither" type="checkbox" /> <span>Dither (Better for photos)</span>
+             </label>
              <label class="row" style="cursor:pointer; user-select:none;">
                <input id="imageInvert" type="checkbox" /> <span>Invert image colors</span>
              </label>
@@ -206,6 +215,19 @@
 
       <!-- SETTINGS TAB -->
       <div id="tab-settings" class="tab-content" style="display:none;">
+        
+        <!-- Saved Presets Section -->
+        <div style="margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #eef2f7;">
+           <h4 class="small" style="font-weight:600; margin-bottom:8px;">Saved Presets</h4>
+           <div class="row">
+             <select id="presetSelect" style="flex:1;">
+               <option value="">Select a preset...</option>
+             </select>
+             <button id="savePresetBtn" class="btn" style="white-space:nowrap;">Save Current</button>
+             <button id="deletePresetBtn" class="btn" style="background:#ef4444; width:40px;" title="Delete Preset">×</button>
+           </div>
+        </div>
+
         <h4 class="small" style="margin-bottom:12px; font-weight:600;">Printer & Label Configuration</h4>
         
         <!-- Vertical Group Layout for Settings -->
@@ -267,6 +289,14 @@
     <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 9V3h12v6h2v8h-4v4H8v-4H4V9h2zm2 10h8v-4H8v4zM18 5H6v4h12V5z"/></svg>
   </button>
 
+  <script>
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registered', reg))
+      .catch(err => console.log('SW failed', err));
+    }
+  </script>
   <script type="module" src="printer.js"></script>
   <script type="module" src="ui.js"></script>
 </body>
