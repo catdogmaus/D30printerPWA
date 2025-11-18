@@ -14,17 +14,23 @@
     body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; margin:0; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
     .container { max-width:1100px; margin:0 auto; padding:1rem; }
     header { padding:12px 0; border-bottom:1px solid #eef2f7; background:#fff; }
-    .small { font-size:0.9rem; color:#6b7280; }
+    .small { font-size:0.85rem; color:#6b7280; display:block; margin-bottom:4px; }
     .card { background:#fff; padding:1rem; border-radius:10px; border:1px solid #f0f4f8; box-shadow:0 6px 18px rgba(0,0,0,0.04); }
-    #previewCanvasWrap { display:flex; align-items:center; justify-content:center; width:100%; }
-    .preview-canvas { display:block; width:100%; height:auto; max-width:680px; border-radius:8px; border:1px solid #E6E9EE; background:white; }
+    #previewCanvasWrap { display:flex; align-items:center; justify-content:center; width:100%; min-height: 120px; }
+    .preview-canvas { display:block; width:auto; height:auto; border-radius:4px; border:1px solid #E6E9EE; background:white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     .tabs { display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap; }
     .tab { padding:0.5rem 0.8rem; border-radius:999px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.03); cursor:pointer; }
     .tab.active { background:#eef2ff; color:#2563eb; }
-    .fab { position:fixed; right:20px; bottom:24px; width:64px; height:64px; border-radius:999px; background:#10b981; color:white; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(16,185,129,0.18); }
-    input, select, textarea { padding:0.6rem; border:1px solid #e6edf3; border-radius:8px; width:100%; }
+    .fab { position:fixed; right:20px; bottom:24px; width:64px; height:64px; border-radius:999px; background:#10b981; color:white; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(16,185,129,0.18); z-index: 50; }
+    input, select, textarea { padding:0.6rem; border:1px solid #e6edf3; border-radius:8px; width:100%; font-size: 1rem; }
     .row { display:flex; gap:0.5rem; align-items:center; }
-    button.btn { padding:6px 10px; border-radius:8px; border:none; cursor:pointer; background:#0ea5e9;color:#fff; }
+    button.btn { padding:6px 14px; border-radius:8px; border:none; cursor:pointer; background:#0ea5e9;color:#fff; font-weight: 500; }
+    
+    /* Layout Utils */
+    .control-group { display:flex; flex-wrap:wrap; gap:16px; margin-top:12px; }
+    .control-block { flex: 1 1 280px; } /* Grow to fill, but wrap if < 280px */
+    .control-row { display:flex; gap:12px; align-items: flex-end; }
+    .control-row > div { flex:1; }
   </style>
 </head>
 <body>
@@ -34,11 +40,11 @@
         <img src="icons/icon-256.png" alt="logo" style="width:44px;height:44px;border-radius:8px;">
         <div>
           <div style="font-weight:600; font-size:18px;">D30 Printer</div>
-          <div class="small">Phomemo D30C — Web PWA</div>
+          <div class="small" style="margin:0;">Phomemo D30C — Web PWA</div>
         </div>
       </div>
       <div style="display:flex; gap:12px; align-items:center;">
-        <div id="connectionStatus" class="small">Not connected</div>
+        <div id="connectionStatus" class="small" style="margin:0;">Not connected</div>
         <button id="connectBtn" class="btn">Connect</button>
       </div>
     </div>
@@ -47,12 +53,12 @@
   <main class="container">
     <!-- Preview -->
     <div id="previewRoot" style="margin:16px 0 8px;">
-      <div class="card" style="padding:18px;">
+      <div class="card" style="padding:18px; background:#fafafa;">
         <div id="previewCanvasWrap">
           <!-- canvas injected here -->
         </div>
       </div>
-      <div id="previewHint" class="small" style="margin-top:8px; text-align:center;">Preview shown in label proportions. Change label size in Settings.</div>
+      <div id="previewHint" class="small" style="margin-top:8px; text-align:center; opacity:0.7;">Preview shown in label proportions.</div>
     </div>
 
     <!-- Tabs -->
@@ -67,128 +73,156 @@
 
     <!-- Tab contents -->
     <section class="card" style="margin-top:12px;">
+      
+      <!-- TEXT TAB -->
       <div id="tab-text" class="tab-content">
         <label for="textInput" class="small">Text</label>
-        <input id="textInput" value="Hello D30C" style="margin-top:8px;" />
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
-          <div>
+        <input id="textInput" value="Hello D30C" />
+        
+        <div class="control-group">
+          <!-- Left Block: Font -->
+          <div class="control-block">
             <label for="fontSize" class="small">Font size</label>
-            <div class="row" style="margin-top:6px;">
-              <button id="fontDec">−</button>
-              <input id="fontSize" type="number" value="40" style="width:80px; text-align:center;" />
-              <button id="fontInc">+</button>
-              <select id="fontPreset" style="width:140px; margin-left:6px;">
+            <div class="row">
+              <button id="fontDec" class="btn" style="background:#e2e8f0; color:#333; width:40px;">−</button>
+              <input id="fontSize" type="number" value="40" style="width:70px; text-align:center;" />
+              <button id="fontInc" class="btn" style="background:#e2e8f0; color:#333; width:40px;">+</button>
+              <select id="fontPreset" style="flex:1; margin-left:6px;">
                 <option value="24">Small (24)</option>
                 <option value="32">Normal (32)</option>
                 <option value="40" selected>Large (40)</option>
                 <option value="48">Huge (48)</option>
               </select>
-              <label style="margin-left:8px;"><input type="checkbox" id="fontBold" /> Bold</label>
             </div>
-            <div class="small" style="margin-top:6px;">Label size and font can be adjusted in Settings.</div>
+            <div class="row" style="margin-top:8px;">
+               <label class="row" style="cursor:pointer; user-select:none;"><input type="checkbox" id="fontBold" /> <span style="font-size:0.9rem">Bold</span></label>
+            </div>
           </div>
-          <div>
-            <label for="alignment" class="small">Alignment</label>
-            <select id="alignment" style="margin-top:6px;">
-              <option value="center">Center</option>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-            </select>
-            <div style="margin-top:12px;">
-              <label for="copiesInput" class="small">Copies</label>
-              <input id="copiesInput" type="number" value="1" style="width:90px; margin-top:6px;" />
-            </div>
-            <div style="margin-top:12px;">
-              <label><input id="invertInput" type="checkbox" /> Invert</label>
+
+          <!-- Right Block: Alignment, Copies, Invert -->
+          <div class="control-block">
+            <div class="control-row">
+              <div style="flex:1.5;">
+                <label for="alignment" class="small">Alignment</label>
+                <select id="alignment">
+                  <option value="center">Center</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div>
+                <label for="copiesInput" class="small">Copies</label>
+                <input id="copiesInput" type="number" value="1" />
+              </div>
+              <div style="flex:0.8; display:flex; justify-content:center; padding-bottom:10px;">
+                <label class="row" style="cursor:pointer; user-select:none; white-space:nowrap;" title="Invert colors">
+                  <input id="invertInput" type="checkbox" /> <span>Invert</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- IMAGE TAB -->
       <div id="tab-image" class="tab-content" style="display:none;">
         <label for="imageFile" class="small">Upload image</label>
-        <input id="imageFile" type="file" accept="image/*" style="margin-top:8px;" />
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
-          <div>
-            <label for="imageThreshold" class="small">Threshold</label>
+        <input id="imageFile" type="file" accept="image/*" />
+        
+        <div class="control-group">
+          <div class="control-block">
+            <label for="imageThreshold" class="small">Threshold (Darkness detection)</label>
             <input id="imageThreshold" type="range" min="0" max="255" value="128" style="width:100%;" />
-            <div class="small">Threshold defines how aggressively dark areas are detected.</div>
           </div>
-          <div>
-            <label class="small">Invert</label><br>
-            <input id="imageInvert" type="checkbox" />
+          <div class="control-block" style="display:flex; align-items:center;">
+             <label class="row" style="cursor:pointer; user-select:none;">
+               <input id="imageInvert" type="checkbox" /> <span>Invert image colors</span>
+             </label>
           </div>
         </div>
-        <div id="imagePreview" style="margin-top:12px;"></div>
+        
+        <!-- Hidden canvas for processing -->
+        <div id="imagePreview" style="display:none;"></div>
       </div>
 
+      <!-- BARCODE TAB -->
       <div id="tab-barcode" class="tab-content" style="display:none;">
-        <label for="barcodeInput" class="small">Barcode (Code 128 recommended)</label>
-        <input id="barcodeInput" value="123456789012" style="margin-top:8px;" />
-        <div class="small" style="margin-top:8px;">Code 128 works in most cases.</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
-          <div>
-            <label for="barcodeType" class="small">Type</label>
-            <select id="barcodeType" style="margin-top:6px;">
-              <option value="CODE128">Code 128 (Default)</option>
-              <option value="EAN13">EAN-13</option>
-              <option value="UPC">UPC</option>
-            </select>
+        <label for="barcodeInput" class="small">Barcode content</label>
+        <input id="barcodeInput" value="123456789012" />
+        
+        <div class="control-group">
+          <div class="control-block">
+             <div class="control-row">
+               <div style="flex:2;">
+                 <label for="barcodeType" class="small">Type</label>
+                 <select id="barcodeType">
+                   <option value="CODE128">Code 128</option>
+                   <option value="EAN13">EAN-13</option>
+                   <option value="UPC">UPC</option>
+                 </select>
+               </div>
+               <div style="flex:1;">
+                 <label for="barcodeScale" class="small">Scale</label>
+                 <input id="barcodeScale" type="number" value="2" />
+               </div>
+             </div>
           </div>
-          <div>
-            <label for="barcodeScale" class="small">Scale</label>
-            <input id="barcodeScale" type="number" value="2" style="width:80px; margin-top:6px;" />
+          <div class="control-block">
+            <div class="small" style="margin-top:8px; color:#888;">Code 128 is recommended for most text/numbers.</div>
           </div>
         </div>
       </div>
 
+      <!-- QR TAB -->
       <div id="tab-qr" class="tab-content" style="display:none;">
         <label for="qrInput" class="small">QR content</label>
-        <input id="qrInput" value="https://example.com" style="margin-top:8px;" />
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
-          <div>
-            <label for="qrEc" class="small">Error correction</label>
-            <select id="qrEc" style="margin-top:6px;">
-              <option value="L">L - Low</option>
-              <option value="M" selected>M - Medium</option>
-              <option value="Q">Q - Quartile</option>
-              <option value="H">H - High</option>
-            </select>
-          </div>
-          <div>
-            <label for="qrSize" class="small">Size (px)</label>
-            <input id="qrSize" type="number" value="256" min="64" max="800" style="width:100px; margin-top:6px;" />
+        <input id="qrInput" value="https://example.com" />
+        
+        <div class="control-group">
+          <div class="control-block">
+            <div class="control-row">
+               <div style="flex:2;">
+                 <label for="qrEc" class="small">Error correction</label>
+                 <select id="qrEc">
+                   <option value="L">L - Low</option>
+                   <option value="M" selected>M - Medium</option>
+                   <option value="Q">Q - Quartile</option>
+                   <option value="H">H - High</option>
+                 </select>
+               </div>
+               <div style="flex:1;">
+                 <label for="qrSize" class="small">Size (px)</label>
+                 <input id="qrSize" type="number" value="256" min="64" max="800" />
+               </div>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- SETTINGS TAB -->
       <div id="tab-settings" class="tab-content" style="display:none;">
-        <h4 class="small">Printer & Label settings</h4>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
-          <div>
-            <label for="labelWidth" class="small">Label width (mm)</label>
-            <input id="labelWidth" type="number" value="12" min="8" max="60" style="width:120px;" />
+        <h4 class="small" style="margin-bottom:12px; font-weight:600;">Printer & Label Configuration</h4>
+        
+        <div class="control-group">
+          <!-- Dimensions -->
+          <div class="control-block" style="display:flex; gap:12px;">
+            <div>
+              <label for="labelWidth" class="small">Width (mm)</label>
+              <input id="labelWidth" type="number" value="12" min="8" max="60" />
+            </div>
+            <div>
+              <label for="labelLength" class="small">Length (mm)</label>
+              <input id="labelLength" type="number" value="40" min="10" max="400" />
+            </div>
+            <div style="display:flex; align-items:flex-end;">
+               <button id="detectLabelBtn" class="btn" style="background:#64748b; font-size:0.8rem;">Auto Detect</button>
+            </div>
           </div>
-          <div>
-            <label for="labelLength" class="small">Label length (mm)</label>
-            <input id="labelLength" type="number" value="40" min="10" max="400" style="width:120px;" />
-          </div>
-          <div>
-            <label for="protocolSelect" class="small">Protocol</label>
-            <select id="protocolSelect">
-              <option value="phomemo_raw">Phomemo raw (D30C)</option>
-              <option value="phomemo_legacy">Phomemo (Legacy)</option>
-              <option value="escpos_raster">ESC/POS raster</option>
-              <option value="zpl">ZPL (Experimental)</option>
-            </select>
-          </div>
-          <div style="align-self:end">
-            <label for="detectLabelBtn" class="small">Auto detect label (this is just placeholder)</label><br>
-            <button id="detectLabelBtn" class="btn" style="margin-top:6px;">Detect</button>
-          </div>
-          <div style="grid-column:1/3; margin-top:8px;">
+
+          <!-- Protocol & Font -->
+          <div class="control-block">
             <label for="fontFamily" class="small">Font family</label>
-            <select id="fontFamily" style="margin-top:6px;">
+            <select id="fontFamily">
               <option value="Inter, sans-serif">Inter (default)</option>
               <option value="sans-serif">System Sans</option>
               <option value="serif">Serif</option>
@@ -196,19 +230,34 @@
               <option value="Roboto, sans-serif">Roboto</option>
             </select>
           </div>
-          <div style="grid-column:1/3; margin-top:8px;">
-            <label class="small">Printer options</label>
-            <div class="row" style="margin-top:6px;">
-              <label for="forceInvert">Force bitmap invert</label>
-              <input id="forceInvert" type="checkbox" style="margin-left:8px;">
-            </div>
-          </div>
+        </div>
+
+        <div class="control-group">
+           <!-- Protocol -->
+           <div class="control-block">
+            <label for="protocolSelect" class="small">Protocol</label>
+            <select id="protocolSelect">
+              <option value="phomemo_raw">Phomemo raw (D30C)</option>
+              <option value="phomemo_legacy">Phomemo (Legacy)</option>
+              <option value="escpos_raster">ESC/POS raster</option>
+              <option value="zpl">ZPL (Experimental)</option>
+            </select>
+           </div>
+           
+           <!-- Options -->
+           <div class="control-block" style="display:flex; align-items:center; gap:12px;">
+             <label class="row" style="cursor:pointer; margin-top:20px;">
+                <input id="forceInvert" type="checkbox">
+                <span>Force bitmap invert (Fix black prints)</span>
+             </label>
+           </div>
         </div>
       </div>
 
+      <!-- LOGS TAB -->
       <div id="tab-logs" class="tab-content" style="display:none;">
         <h4 class="small">Logs</h4>
-        <textarea id="logArea" style="height:220px; font-family:monospace; width:100%;"></textarea>
+        <textarea id="logArea" style="height:220px; font-family:monospace; width:100%; font-size:0.8rem;"></textarea>
       </div>
     </section>
   </main>
