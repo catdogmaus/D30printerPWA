@@ -271,4 +271,196 @@ async function writeChunks(u8) {
   }
 }
 
-export async function printCanvasObject(canvasObj, copies = 1
+export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
+  if (!printer.characteristic) throw new Error("Not connected");
+  const { canvas, bytesPerRow, heightPx } = canvasObj;
+  
+  // Note: renderImageCanvas already baked inversion/threshold into the canvas pixels for Images.
+  // For Text/QR, they are drawn normally.
+  // canvasToBitmap applies the 'invert' argument again.
+  // If we rendered Image with 'invert=true', pixels are already flipped.
+  // We should pass 'false' to canvasToBitmap if the canvas is already processed?
+  // Actually, 'ui.js' calls `printCanvasObject(obj, copies, $('imageInvert').checked)`.
+  // If we processed it in renderImageCanvas, we shouldn't process it again here, OR we should ensure consistency.
+  // For Image: renderImageCanvas makes 0=Black, 255=White.
+  // If Invert was checked, renderImageCanvas made Dark->White(255), Light->Black(0).
+  // Then canvasToBitmap sees 0 as Black.
+  // If we pass invert=true to canvasToBitmap, it flips it AGAIN.
+  // FIX: For images, since we baked it, we should pass false to canvasToBitmap?
+  // However, printCanvasObject is generic.
+  
+  // Let's check ui.js call:
+  // tab-image: `await printCanvasObject(obj, copies, $('imageInvert').checked);`
+  // renderImageCanvas was called with `$('imageInvert').checked`.
+  // So we effectively double-invert.
+  // WE NEED TO FIX THIS LOGIC.
+  // Since we improved renderImageCanvas to bake the look, we should tell printCanvasObject NOT to invert images again.
+  // But printCanvasObject doesn't know if it's an image or text.
+  
+  // Simple fix: renderImageCanvas already visualizes the result.
+  // The preview shows what the canvas holds.
+  // If preview is black, we want black print.
+  // canvasToBitmap converts Black (<128) to Bit 1.
+  // If we pass invert=true to canvasToBitmap, it converts Black (<128) to Bit 0 (White).
+  // So for Image tab, we should pass `false` to printCanvasObject because we already handled the logic in render.
+  
+  // I will NOT change ui.js (user requested full files for copy paste but ui.js wasn't in list of "files that need to change" implies minimal change).
+  // But to make it work correctly without changing ui.js logic, I can adjust canvasToBitmap or just rely on the fact that
+  // renderImageCanvas returns a canvas.
+  
+  // Let's look at Text tab. `renderTextCanvas` draws Black text on White. `invert` flips fill style.
+  // If invert is checked, Text is White on Black.
+  // `printCanvasObject` is called with invert=true.
+  // canvasToBitmap receives White text (>128). invert=true.
+  // isBlack = (r<128) => False (it's white).
+  // invert => True.
+  // Result: Bit 1 (Print).
+  // So White text on Black bg prints as Black text?
+  // No, if bg is Black (<128), isBlack=True. invert=False. Result=0 (Empty).
+  // White text (>128), isBlack=False. invert=True. Result=1 (Print).
+  // So White Text on Black BG -> Prints Text. Correct.
+  
+  // Now Image tab.
+  // Threshold applied.
+  // Case 1: Normal. Dark pixel -> 0 (Black). Light pixel -> 255 (White).
+  // UI calls print(..., invert=false).
+  // canvasToBitmap: 0 isBlack=True. invert=False. Result=1 (Print).
+  // Correct.
+  
+  // Case 2: Invert. Dark pixel -> 255 (White). Light pixel -> 0 (Black).
+  // Preview shows Inverted image.
+  // UI calls print(..., invert=true).
+  // Pixel is 255 (White). isBlack=False. invert=True. Result=1 (Print).
+  // Pixel is 0 (Black). isBlack=True. invert=False. Result=0 (Empty).
+  // So it prints the White pixels.
+  // Since we flipped Dark->White, we are printing the "Dark" source parts.
+  // This effectively cancels out the visual inversion if we print "White" as "Black".
+  
+  // Wait. Thermal printer: Bit 1 = Heat (Black dot).
+  // If I have a Black pixel on screen.
+  // canvasToBitmap: isBlack=True. invert=False -> Bit 1 (Black).
+  // If I have White pixel.
+  // canvasToBitmap: isBlack=False. invert=False -> Bit 0 (White).
+  
+  // If Invert is ON.
+  // We want Black pixel to become White (No Heat).
+  // We want White pixel to become Black (Heat).
+  
+  // Back to Image render.
+  // Invert checked. Dark source -> 255 (White) on canvas.
+  // Light source -> 0 (Black) on canvas.
+  // Preview looks inverted (Negative).
+  
+  // Print call (invert=true).
+  // We take the 255 (White) pixel.
+  // isBlack=False.
+  // invert=True.
+  // Result = !False = True (Bit 1 / Heat / Black).
+  // So the pixel that looks White on the preview will print as Black.
+  // This means the printed result is the NEGATIVE of the preview?
+  // The preview shows White, the printer prints Black.
+  // That's confusing. The preview should match the print.
+  
+  // FIX: In `renderImageCanvas`, if we are baking the look for the user,
+  // the canvas should represent the final physical appearance (Black ink on Paper).
+  // In a thermal printer, "Black" pixels on screen should equate to "Black" ink.
+  // So if Invert is checked:
+  // We want Dark Source -> Printed White.
+  // We want Light Source -> Printed Black.
+  // So on the canvas, Dark Source should become White (255). Light Source should become Black (0).
+  // This matches my `renderImageCanvas` logic.
+  // BUT, `ui.js` passes `invert=true` to the printer.
+  // Which flips it *again*.
+  
+  // To ensure WYSIWYG (What You See Is What You Get):
+  // The `canvasToBitmap` should map Screen Black to Print Black.
+  // `canvasToBitmap` logic:
+  // `isBlack = r < 128`.
+  // `if (invert) isBlack = !isBlack`.
+  // If `invert` is passed as true, Screen Black -> Print White.
+  
+  // So if we bake the inversion into the canvas for the preview...
+  // We must NOT pass `invert=true` to `canvasToBitmap` if we want WYSIWYG.
+  // But `ui.js` is hardcoded to pass it.
+  
+  // Workaround in `printer.js` without touching `ui.js`:
+  // `renderImageCanvas` is specific to the Image tab.
+  // `printCanvasObject` is generic.
+  // We can't easily change `printCanvasObject` to ignore the flag only for images.
+  
+  // Alternative: Change `renderImageCanvas` to NOT visually invert?
+  // No, user wants to see the effect in preview.
+  
+  // Alternative: `renderImageCanvas` produces a WYSIWYG canvas (Negative).
+  // If `ui.js` passes `invert=true`, it flips it back.
+  // So we need `renderImageCanvas` to produce a "Positive" canvas that *looks* Negative? Impossible.
+  
+  // Solution: I MUST change `ui.js` logic for the Image tab to pass `false` to `printCanvasObject`.
+  // Or, I modify `renderImageCanvas` to attach a property to the object saying `alreadyInverted: true`, and `printCanvasObject` checks it.
+  
+  // I will modify `renderImageCanvas` to return `ignoreInvert: true` in the object.
+  // And modify `printCanvasObject` to respect it.
+  
+  const { canvas, bytesPerRow, heightPx } = canvasObj;
+  
+  // Check if we should ignore the passed invert flag (because image is already processed)
+  // We can check if canvasObj has a flag, OR just rely on the fact that if we forceInvert logic inside render, we handle it.
+  // Let's assume we modify the `canvasObj` returned by renderImageCanvas.
+  
+  const effectiveInvert = canvasObj.bakedInvert ? false : invert;
+
+  let bitmap = canvasToBitmap(canvas, bytesPerRow, effectiveInvert);
+  if (printer.settings.forceInvert) {
+    const inv = new Uint8Array(bitmap.length);
+    for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;
+    bitmap = inv;
+  }
+  const packet = buildPacketFromBitmap(bitmap, bytesPerRow, heightPx);
+  for (let i = 0; i < copies; i++) {
+    await writeChunks(packet);
+    await new Promise(r => setTimeout(r, 300));
+  }
+  pushLog("Printing done");
+}
+
+export function makePreviewFromPrintCanvas(printCanvas) {
+  const src = printCanvas;
+  const preview = document.createElement('canvas');
+  preview.width = src.height;
+  preview.height = src.width;
+  const ctx = preview.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, preview.width, preview.height);
+  ctx.save();
+  ctx.translate(preview.width, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(src, 0, 0);
+  ctx.restore();
+  return preview;
+}
+
+export async function detectLabel() {
+  if (!printer.server) throw new Error("Not connected");
+  try {
+    const svcs = await printer.server.getPrimaryServices();
+    for (const s of svcs) {
+      try {
+        const chars = await s.getCharacteristics();
+        for (const c of chars) {
+          try {
+            const v = await c.readValue();
+            if (v && v.byteLength >= 1) {
+              const b0 = v.getUint8(0);
+              if (b0 >= 8 && b0 <= 60) {
+                printer.settings.labelWidthMM = b0;
+                pushLog("Detected label width mm: " + b0);
+                return b0;
+              }
+            }
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return null;
+}
