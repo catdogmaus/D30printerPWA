@@ -142,8 +142,9 @@ async function updatePreview(){
         img.onload = ()=>{
           const invert = $('imageInvert').checked;
           const dither = $('imageDither').checked;
-          // Pass rotation here
-          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, dither, imageRotation);
+          const scalePct = Number($('imageScale').value || 100);
+          // Pass rotation and scale here
+          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, dither, imageRotation, scalePct);
           const p = makePreviewFromPrintCanvas(obj2.canvas);
           placePreviewCanvas(p);
         };
@@ -187,7 +188,7 @@ function setup(){
   
   $('connectBtn').addEventListener('click', async ()=> { if(!printer.connected) await connect(); else await disconnect(); updatePreviewDebounced(); });
 
-  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=> wireSimple(k,k));
+  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=> wireSimple(k,k));
   ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
   
   $('textInput').addEventListener('input', ()=>{ saveSetting('textInput', $('textInput').value); updatePreviewDebounced(); });
@@ -249,8 +250,9 @@ function setup(){
         const dataURL = $('imagePreview')?.dataset?.canvas; if(!dataURL) return alert('Please upload an image');
         const img = new Image(); img.onload = async ()=>{ 
            const dither = $('imageDither').checked;
-           // Pass rotation here too
-           const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, dither, imageRotation); 
+           const scalePct = Number($('imageScale').value || 100);
+           // Pass rotation and scale here too
+           const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, dither, imageRotation, scalePct); 
            await printCanvasObject(obj, copies, $('imageInvert').checked); 
         }; img.src = dataURL;
       } else if (shown === 'tab-barcode'){
@@ -268,7 +270,7 @@ function setup(){
   $('deletePresetBtn').addEventListener('click', deletePreset);
   $('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
 
-  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
+  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
     const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el){ if(el.type==='checkbox') el.checked = !!v; else el.value = v; } }
   });
   ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
