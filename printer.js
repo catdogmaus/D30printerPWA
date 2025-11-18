@@ -9,8 +9,7 @@ export const printer = {
     labelLengthMM: 40,
     dpiPerMM: 8,
     protocol: "phomemo_raw",
-    fontFamily: "Inter, sans-serif",
-    forceInvert: false
+    fontFamily: "Inter, sans-serif"
   },
   logs: []
 };
@@ -116,9 +115,7 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   ctx.fillText(text, x, widthPx / 2);
   ctx.restore();
   
-  // FIX: We return bakedInvert: true here.
-  // Since we already painted the canvas Black/White based on the invert flag,
-  // the canvas is WYSIWYG. We do NOT want the printer logic to flip the bits again.
+  // Return bakedInvert so printer doesn't flip it again
   return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
@@ -272,12 +269,6 @@ export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   const effectiveInvert = bakedInvert ? false : invert;
 
   let bitmap = canvasToBitmap(canvas, bytesPerRow, effectiveInvert);
-  
-  if (printer.settings.forceInvert) {
-    const inv = new Uint8Array(bitmap.length);
-    for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;
-    bitmap = inv;
-  }
   
   const packet = buildPacketFromBitmap(bitmap, bytesPerRow, heightPx);
   for (let i = 0; i < copies; i++) {
