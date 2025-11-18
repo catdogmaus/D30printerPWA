@@ -142,26 +142,28 @@
         <input id="imageFile" type="file" accept="image/*" />
         
         <div class="control-group">
-          <div class="control-block">
+          <!-- Left Block: Controls -->
+          <div class="control-block" style="flex:2">
             <label for="imageThreshold" class="small">Threshold (Darkness detection)</label>
             <input id="imageThreshold" type="range" min="0" max="255" value="128" style="width:100%;" />
             
             <div style="margin-top:12px;">
-               <label for="imageScale" class="small">Scale (%)</label>
-               <input id="imageScale" type="number" value="100" min="10" max="500" step="5" />
+               <label for="imageScale" class="small">Scale / Rotation</label>
+               <div class="row">
+                 <input id="imageScale" type="number" value="100" min="10" max="500" step="5" style="flex:1;" title="Scale Percentage" placeholder="%">
+                 <button id="imageRotateBtn" class="btn" style="background:#cbd5e1; color:#334155; flex:1; padding: 0.6rem; white-space: nowrap;">Rotate 90°</button>
+               </div>
             </div>
           </div>
-          <div class="control-block" style="display:flex; flex-direction: column; justify-content: center; gap:8px;">
+          
+          <!-- Right Block: Options -->
+          <div class="control-block" style="display:flex; flex-direction: column; justify-content: end; gap:12px; padding-bottom:4px;">
              <label class="row" style="cursor:pointer; user-select:none;">
-               <input id="imageDither" type="checkbox" /> <span>Dither (Better for photos)</span>
+               <input id="imageDither" type="checkbox" /> <span>Dither (Photos)</span>
              </label>
              <label class="row" style="cursor:pointer; user-select:none;">
-               <input id="imageInvert" type="checkbox" /> <span>Invert image colors</span>
+               <input id="imageInvert" type="checkbox" /> <span>Invert colors</span>
              </label>
-             <!-- Rotation Button -->
-             <button id="imageRotateBtn" class="btn" style="background:#cbd5e1; color:#334155; margin-top:4px; width:100%;">
-               Rotate 90°
-             </button>
           </div>
         </div>
         
@@ -303,7 +305,17 @@
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log('SW registered', reg))
+      .then(reg => {
+         // Optional: Check for updates
+         reg.addEventListener('updatefound', () => {
+           const newWorker = reg.installing;
+           newWorker.addEventListener('statechange', () => {
+             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+               console.log('New version available. Restart app to update.');
+             }
+           });
+         });
+      })
       .catch(err => console.log('SW failed', err));
     }
   </script>
