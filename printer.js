@@ -115,7 +115,11 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   if (alignment === 'right') x = heightPx - 10;
   ctx.fillText(text, x, widthPx / 2);
   ctx.restore();
-  return { canvas, bytesPerRow, widthPx, heightPx };
+  
+  // FIX: We return bakedInvert: true here.
+  // Since we already painted the canvas Black/White based on the invert flag,
+  // the canvas is WYSIWYG. We do NOT want the printer logic to flip the bits again.
+  return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
 export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8) {
@@ -263,7 +267,7 @@ export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
   
   const { canvas, bytesPerRow, heightPx, bakedInvert } = canvasObj;
   
-  // If the image logic already baked the inversion into the pixels (renderImageCanvas),
+  // If the logic already baked the inversion into the pixels (renderImageCanvas or renderTextCanvas),
   // we force invert to false here so we don't flip it back.
   const effectiveInvert = bakedInvert ? false : invert;
 
