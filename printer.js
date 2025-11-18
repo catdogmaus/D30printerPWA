@@ -91,7 +91,8 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   const canvas = document.createElement('canvas');
   canvas.width = alignedWidth;
   canvas.height = heightPx;
-  const ctx = canvas.getContext('2d');
+  // PERFORMANCE FIX: Add willReadFrequently: true
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   // Base fill
   ctx.fillStyle = invert ? "#000000" : "#FFFFFF";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -211,7 +212,8 @@ export async function renderQRCanvas(value, size=256, labelWidthMM=12, labelLeng
 }
 
 export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
-  const ctx = canvas.getContext('2d');
+  // PERFORMANCE FIX: Add willReadFrequently: true
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const w = canvas.width;
   const h = canvas.height;
   const img = ctx.getImageData(0, 0, w, h).data;
