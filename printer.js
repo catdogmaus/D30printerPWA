@@ -25,13 +25,14 @@ function pushLog(msg) {
 export async function connect() {
   try {
     pushLog("Requesting Bluetooth device...");
+    // We request battery_service as optional. If device doesn't have it, it won't break connection.
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [
         '0000ff00-0000-1000-8000-00805f9b34fb',
         '0000ff01-0000-1000-8000-00805f9b34fb',
         '0000ff02-0000-1000-8000-00805f9b34fb',
-        'battery_service' // Request Battery Service (0x180F)
+        'battery_service'
       ]
     });
     printer.device = device;
@@ -49,9 +50,7 @@ export async function connect() {
     const services = await printer.server.getPrimaryServices();
     for (const s of services) {
       try {
-        // Skip Battery service for printing search
-        if (s.uuid.includes('180f')) continue;
-        
+        if (s.uuid.includes('180f')) continue; // Skip Battery for print search
         const chars = await s.getCharacteristics();
         for (const c of chars) {
           if (c.properties.write || c.properties.writeWithoutResponse) {
@@ -59,7 +58,6 @@ export async function connect() {
             printer.connected = true;
             pushLog(`Using char ${c.uuid}`);
             updateConnUI(true);
-            // Don't return yet, we want to check battery too
           }
         }
       } catch(e) {}
@@ -70,19 +68,20 @@ export async function connect() {
       return;
     }
 
-    // 2. Setup Battery Status
+    // 2. Setup Battery Status (Silent Fail)
     try {
        const battService = await printer.server.getPrimaryService('battery_service');
-       const battChar = await battService.getCharacteristic('battery_level'); // 0x2A19
+       const battChar = await battService.getCharacteristic('battery_level');
        printer.batteryChar = battChar;
        await readBattery();
-       // Listen for updates
        if (battChar.properties.notify) {
          await battChar.startNotifications();
          battChar.addEventListener('characteristicvaluechanged', readBattery);
        }
     } catch(e) {
-       console.log("Battery service not available", e);
+       // D30 often does not support standard battery service. 
+       // We ignore this error so the app keeps working.
+       console.log("Battery info not available (expected for D30)");
     }
 
   } catch (e) {
@@ -143,37 +142,92 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   ctx.save();
   
-  // Rotation: Vertical Label
+  // Rotation: Standard D30 prints along the tape.
+  // We rotate -90deg. The new X axis points UP the canvas. The new Y axis points RIGHT.
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
+  
+  // We center the text across the WIDTH (12mm) of the label.
+  // Since Y axis is now width, we use textBaseline="middle" at y = width/2.
   ctx.textBaseline = "middle";
+  const y = widthPx / 2;
 
-  // Calculate Multi-line
+  // We align the text lines along the LENGTH (40mm) of the label (X axis).
+  // To prevent overlap, we must calculate the start position of the Block,
+  // and then draw each line sequentially.
+  // We use textAlign="left" (Start) so that the text draws starting exactly at our calculated X.
+  // If we used "center", the line would center itself on X, causing misalignment if lines have different lengths.
+  ctx.textAlign = "left"; 
+
   const lines = text.split('\n');
   const lineHeight = fontSize * 1.2;
   const totalTextHeight = lines.length * lineHeight;
   
-  // Determine Start X (Position along the 40mm length)
-  // "alignment" in UI controls position along the length (Top/Center/Bottom)
+  // Calculate where the first line begins along the X axis
   let startX = 0;
+  
+  // Calculate width of the longest line to support 'center' alignment of the BLOCK relative to the page
+  // Note: 'alignment' param is user preference (Top/Center/Bottom of label)
+  
   if (alignment === 'left') {
-    startX = 10 + (lineHeight/2); // Start at top
+     // Top of label
+     startX = 10; 
   } else if (alignment === 'right') {
-    startX = heightPx - 10 - totalTextHeight + (lineHeight/2); // Start near bottom
+     // Bottom of label
+     startX = heightPx - 10 - totalTextHeight;
   } else {
-    // Center
-    startX = (heightPx - totalTextHeight) / 2 + (lineHeight/2);
+     // Center of label (default)
+     startX = (heightPx - totalTextHeight) / 2;
   }
 
-  // Center across the 12mm width (Standard)
-  const y = widthPx / 2;
-  ctx.textAlign = "center"; // Always center across width for now
-
+  // Draw each line
   lines.forEach((line, i) => {
-    ctx.fillText(line, startX + (i * lineHeight), y);
+    // Check for centering INDIVIDUAL lines within the block?
+    // No, usually labels are center-aligned.
+    // Since we set textAlign="left", we are drawing from startX.
+    // But if the user selected "Center" alignment, they usually expect the text to be centered.
+    // Since we are rotating, "Center" alignment usually refers to the vertical placement on the tape (Top/Mid/Bot).
+    // But horizontal centering (across the text width) is handled by the fact that X axis IS the text direction.
+    
+    // Actually, for a truly "Centered" look:
+    // We want the text block centered on the label length.
+    // AND we want the text lines centered relative to each other.
+    
+    // Improved Logic: Use textAlign = "center".
+    // But then `x` must be the CENTER of the line.
+    // So x = startX + (totalTextHeight/2)? No.
+    // x = The center point of the label length?
+    
+    // Let's revert to "center" logic but calculate the anchor correctly.
+    
+    if (alignment === 'center') {
+      ctx.textAlign = "center";
+      const centerX = heightPx / 2; // Center of label length
+      // Offset to top of the text block
+      const blockTop = centerX - (totalTextHeight / 2);
+      // Draw
+      const lineX = blockTop + (i * lineHeight) + (lineHeight/2); 
+      ctx.fillText(line, lineX, y);
+    } else {
+      // For Left/Right alignment, "left" textAlign makes sense (drawing from start point)
+      // But we actually want the text to "flow" correctly.
+      // Let's stick to "center" for the text anchor, but shift the anchor position.
+      
+      ctx.textAlign = "center";
+      let blockCenter = 0;
+      
+      if (alignment === 'left') { // Top of label
+         blockCenter = 10 + (totalTextHeight / 2);
+      } else if (alignment === 'right') { // Bottom of label
+         blockCenter = (heightPx - 10) - (totalTextHeight / 2);
+      }
+      
+      const lineX = (blockCenter - (totalTextHeight / 2)) + (i * lineHeight) + (lineHeight/2);
+      ctx.fillText(line, lineX, y);
+    }
   });
 
   ctx.restore();
@@ -182,8 +236,6 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
 
 export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
-  
-  // 1. Draw image scaled
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
   const dw = image.width * ratio;
   const dh = image.height * ratio;
@@ -194,62 +246,36 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
   ctx.drawImage(image, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
 
-  // 2. Processing
   const w = canvas.width;
   const h = canvas.height;
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
   
   if (dither) {
-    // Floyd-Steinberg Dithering
-    // Convert to grayscale first
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       d[i] = d[i+1] = d[i+2] = gray;
     }
-
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4;
         const oldPixel = d[i];
-        
-        // Quantize: Black(0) or White(255)?
-        // Use simple 128 threshold for quantization choice, but error spreads.
-        // For inversion logic: If invert=false, Dark(<128)->Black(0).
-        // We standardly dither to 0/255 then flip later if needed, 
-        // but to keep it simple: Assume target is Black on White paper.
         const newPixel = oldPixel < 128 ? 0 : 255;
-        
         d[i] = d[i+1] = d[i+2] = newPixel;
-        
         const quantError = oldPixel - newPixel;
-        
-        // Spread error
-        if (x + 1 < w) {
-          d[((y * w + x + 1) * 4)] += quantError * 7 / 16;
-        }
-        if (x - 1 >= 0 && y + 1 < h) {
-          d[(( (y + 1) * w + x - 1) * 4)] += quantError * 3 / 16;
-        }
-        if (y + 1 < h) {
-          d[(( (y + 1) * w + x) * 4)] += quantError * 5 / 16;
-        }
-        if (x + 1 < w && y + 1 < h) {
-          d[(( (y + 1) * w + x + 1) * 4)] += quantError * 1 / 16;
-        }
+        if (x + 1 < w) d[((y * w + x + 1) * 4)] += quantError * 7 / 16;
+        if (x - 1 >= 0 && y + 1 < h) d[(( (y + 1) * w + x - 1) * 4)] += quantError * 3 / 16;
+        if (y + 1 < h) d[(( (y + 1) * w + x) * 4)] += quantError * 5 / 16;
+        if (x + 1 < w && y + 1 < h) d[(( (y + 1) * w + x + 1) * 4)] += quantError * 1 / 16;
       }
     }
-    
-    // Apply Invert (Post-Dither)
     if (invert) {
        for (let i = 0; i < d.length; i += 4) {
-         const v = d[i] === 0 ? 255 : 0; // Flip Black/White
+         const v = d[i] === 0 ? 255 : 0;
          d[i] = d[i+1] = d[i+2] = v;
        }
     }
-
   } else {
-    // Standard Threshold
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       let isDark = gray < threshold;
