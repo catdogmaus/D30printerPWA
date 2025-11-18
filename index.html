@@ -218,9 +218,7 @@
                  <input id="labelLength" type="number" value="40" min="10" max="400" />
                </div>
                <div style="flex:1; min-width:140px;">
-                  <!-- Invisible label spacer to align button with inputs -->
                   <label class="small" style="visibility:hidden">Detect</label>
-                  <!-- Padding 0.6rem matches input styles. Border added to match input border size exactly. -->
                   <button id="detectLabelBtn" class="btn" style="width:100%; padding:0.6rem; border:1px solid transparent; background:#64748b; font-size:0.9rem; white-space:nowrap;" title="This feature is currently not implemented">Auto Detect (N/A)</button>
                </div>
              </div>
@@ -228,8 +226,6 @@
 
           <!-- Row 2: Font & Protocol -->
           <div style="display:flex; flex-wrap:wrap; gap:16px; width:100%;">
-            
-            <!-- Font Family -->
             <div style="flex:1 1 280px;">
               <label for="fontFamily" class="small">Font family</label>
               <select id="fontFamily">
@@ -240,8 +236,6 @@
                 <option value="Roboto, sans-serif">Roboto</option>
               </select>
             </div>
-
-            <!-- Protocol -->
             <div style="flex:1 1 280px;">
               <label for="protocolSelect" class="small">Protocol</label>
               <select id="protocolSelect">
@@ -253,12 +247,14 @@
             </div>
           </div>
 
-          <!-- Row 3: Options -->
-          <div>
-             <label class="row" style="cursor:pointer; user-select:none;">
-                <input id="forceInvert" type="checkbox">
-                <span>Force bitmap invert (Fix black prints)</span>
-             </label>
+          <!-- Row 3: Options (Aligned correctly now) -->
+          <div class="control-group" style="margin-top:0;">
+             <div class="control-block">
+                <label class="row" style="cursor:pointer; user-select:none;">
+                   <input id="forceInvert" type="checkbox">
+                   <span>Force bitmap invert (Fix black prints)</span>
+                </label>
+             </div>
           </div>
           
         </div>
