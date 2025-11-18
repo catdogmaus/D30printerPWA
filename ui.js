@@ -10,7 +10,8 @@ import {
   renderQRCanvas,
   printCanvasObject,
   detectLabel,
-  makePreviewFromPrintCanvas
+  makePreviewFromPrintCanvas,
+  makeLabelCanvas // Imported to create blank canvas
 } from './printer.js';
 
 function $(id){return document.getElementById(id);}
@@ -32,16 +33,26 @@ function setActiveTab(name){
 function placePreviewCanvas(sourceCanvas){
   const wrap = $('previewCanvasWrap');
   wrap.innerHTML='';
-  // scale to available width
-  const maxW = Math.min(680, window.innerWidth*0.9);
-  const maxH = Math.min(350, window.innerHeight*0.45);
+  
+  // Reduced size constraints (approx 40% smaller max dimensions)
+  const maxW = Math.min(400, window.innerWidth*0.8);
+  const maxH = Math.min(220, window.innerHeight*0.4);
+  
   const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
   const cv = document.createElement('canvas');
+  
+  // Ensure at least 1px
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  // Background for transparent parts
+  ctx.fillStyle = '#fff'; 
+  ctx.fillRect(0,0,cv.width,cv.height);
+  
+  // Draw scaled
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
+  
   cv.className = 'preview-canvas';
   wrap.appendChild(cv);
 }
@@ -82,7 +93,10 @@ async function updatePreview(){
         img.src = cdata;
         return;
       } else {
-        $('previewCanvasWrap').innerHTML = '<div class="small">No image uploaded</div>';
+        // Render a blank canvas if no image is uploaded to maintain preview box size
+        const blankObj = makeLabelCanvas(labelW, labelH, dpi, false);
+        const p = makePreviewFromPrintCanvas(blankObj.canvas);
+        placePreviewCanvas(p);
         return;
       }
     } else if (shown === 'tab-barcode') {
@@ -90,6 +104,7 @@ async function updatePreview(){
     } else if (shown === 'tab-qr') {
       obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||256), labelW, labelH, dpi);
     } else {
+      // Fallback default
       obj = renderTextCanvas($('textInput').value||'', Number($('fontSize').value||36), $('alignment').value||'center', $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily);
     }
     if(obj && obj.canvas){
@@ -97,7 +112,7 @@ async function updatePreview(){
       placePreviewCanvas(previewCanvas);
     }
     const hint = $('previewHint');
-    if(hint) hint.textContent = `Preview shown in label proportions (${labelW}×${labelH} mm). Change label size in Settings.`;
+    if(hint) hint.textContent = `Preview: ${labelW}×${labelH} mm`;
   }catch(e){ console.warn('preview error', e); }
 }
 
