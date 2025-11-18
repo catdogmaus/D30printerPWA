@@ -151,9 +151,9 @@
         <input id="barcodeInput" value="123456789012" />
         
         <div class="control-group">
-          <div class="control-block">
-             <div class="control-row">
-               <div style="flex:2;">
+          <div class="control-block" style="flex:2;">
+             <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+               <div style="min-width:150px; flex:1;">
                  <label for="barcodeType" class="small">Type</label>
                  <select id="barcodeType">
                    <option value="CODE128">Code 128</option>
@@ -161,14 +161,14 @@
                    <option value="UPC">UPC</option>
                  </select>
                </div>
-               <div style="flex:1;">
+               <div style="width:80px;">
                  <label for="barcodeScale" class="small">Scale</label>
                  <input id="barcodeScale" type="number" value="2" />
                </div>
+               <div style="flex:1.5; margin-bottom:8px; min-width:200px;">
+                 <span class="small" style="color:#888; margin:0;">Code 128 is recommended for most text/numbers.</span>
+               </div>
              </div>
-          </div>
-          <div class="control-block">
-            <div class="small" style="margin-top:8px; color:#888;">Code 128 is recommended for most text/numbers.</div>
           </div>
         </div>
       </div>
@@ -215,7 +215,7 @@
               <input id="labelLength" type="number" value="40" min="10" max="400" />
             </div>
             <div style="display:flex; align-items:flex-end;">
-               <button id="detectLabelBtn" class="btn" style="background:#64748b; font-size:0.8rem;">Auto Detect</button>
+               <button id="detectLabelBtn" class="btn" style="background:#64748b; font-size:0.8rem;" title="This feature is currently not implemented">Auto Detect (Placeholder)</button>
             </div>
           </div>
 
