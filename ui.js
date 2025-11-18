@@ -11,7 +11,7 @@ import {
   printCanvasObject,
   detectLabel,
   makePreviewFromPrintCanvas,
-  makeLabelCanvas // Imported to create blank canvas
+  makeLabelCanvas
 } from './printer.js';
 
 function $(id){return document.getElementById(id);}
@@ -20,6 +20,71 @@ function loadSetting(k,def){const v=localStorage.getItem(k); if(!v) return def; 
 
 let previewTimer=null;
 const DEBOUNCE=160;
+
+// --- Presets Logic ---
+function updatePresetSelect() {
+  const sel = $('presetSelect');
+  sel.innerHTML = '<option value="">Select a preset...</option>';
+  const presets = loadSetting('userPresets', {});
+  Object.keys(presets).forEach(k => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = k;
+    sel.appendChild(opt);
+  });
+}
+
+function saveCurrentAsPreset() {
+  const name = prompt("Enter preset name:");
+  if (!name) return;
+  const presets = loadSetting('userPresets', {});
+  
+  // Capture current UI state for the Text/General settings
+  presets[name] = {
+    labelWidth: $('labelWidth').value,
+    labelLength: $('labelLength').value,
+    fontSize: $('fontSize').value,
+    fontFamily: $('fontFamily').value,
+    alignment: $('alignment').value,
+    fontBold: $('fontBold').checked
+  };
+  
+  saveSetting('userPresets', presets);
+  updatePresetSelect();
+  alert(`Preset "${name}" saved.`);
+}
+
+function loadPreset(name) {
+  const presets = loadSetting('userPresets', {});
+  const p = presets[name];
+  if (p) {
+    if (p.labelWidth) $('labelWidth').value = p.labelWidth;
+    if (p.labelLength) $('labelLength').value = p.labelLength;
+    if (p.fontSize) $('fontSize').value = p.fontSize;
+    if (p.fontFamily) $('fontFamily').value = p.fontFamily;
+    if (p.alignment) $('alignment').value = p.alignment;
+    if (p.fontBold !== undefined) $('fontBold').checked = p.fontBold;
+    
+    // Trigger updates
+    saveSetting('labelWidth', p.labelWidth);
+    saveSetting('labelLength', p.labelLength);
+    saveSetting('fontSize', p.fontSize);
+    updatePreviewDebounced();
+  }
+}
+
+function deletePreset() {
+  const sel = $('presetSelect');
+  const name = sel.value;
+  if (!name) return;
+  if (confirm(`Delete preset "${name}"?`)) {
+    const presets = loadSetting('userPresets', {});
+    delete presets[name];
+    saveSetting('userPresets', presets);
+    updatePresetSelect();
+  }
+}
+// ---------------------
 
 function setActiveTab(name){
   document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
@@ -33,35 +98,16 @@ function setActiveTab(name){
 function placePreviewCanvas(sourceCanvas){
   const wrap = $('previewCanvasWrap');
   wrap.innerHTML='';
-  
-  // Dynamic Preview Scaling
-  // Instead of hardcoding 400px, we use the actual container width.
-  // We allow the preview to grow to fill the card.
-  
-  // Ensure wrap has a width (it might be 0 if hidden, but it shouldn't be).
-  // Fallback to window width minus padding if wrap is 0.
   const availableW = wrap.clientWidth || (window.innerWidth - 40);
-  
-  // Restrict height reasonably so it doesn't push the entire page down too far
-  // But allow it to be larger than before.
   const availableH = Math.min(500, window.innerHeight * 0.6);
-  
   const scale = Math.min(availableW / sourceCanvas.width, availableH / sourceCanvas.height, 1);
-  
   const cv = document.createElement('canvas');
-  
-  // Ensure at least 1px
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
-  
   const ctx = cv.getContext('2d');
-  // Background for transparent parts
   ctx.fillStyle = '#fff'; 
   ctx.fillRect(0,0,cv.width,cv.height);
-  
-  // Draw scaled
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
-  
   cv.className = 'preview-canvas';
   wrap.appendChild(cv);
 }
@@ -95,14 +141,14 @@ async function updatePreview(){
         const img = new Image();
         img.onload = ()=>{
           const invert = $('imageInvert').checked;
-          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi);
+          const dither = $('imageDither').checked;
+          const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, dither);
           const p = makePreviewFromPrintCanvas(obj2.canvas);
           placePreviewCanvas(p);
         };
         img.src = cdata;
         return;
       } else {
-        // Render a blank canvas if no image is uploaded to maintain preview box size
         const blankObj = makeLabelCanvas(labelW, labelH, dpi, false);
         const p = makePreviewFromPrintCanvas(blankObj.canvas);
         placePreviewCanvas(p);
@@ -113,7 +159,6 @@ async function updatePreview(){
     } else if (shown === 'tab-qr') {
       obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||256), labelW, labelH, dpi);
     } else {
-      // Fallback default
       obj = renderTextCanvas($('textInput').value||'', Number($('fontSize').value||36), $('alignment').value||'center', $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily);
     }
     if(obj && obj.canvas){
@@ -125,34 +170,33 @@ async function updatePreview(){
   }catch(e){ console.warn('preview error', e); }
 }
 
-// persist helpers wiring
 function wireSimple(id, key, transform = v=>v){
   const el = $(id); if(!el) return;
   const handler = ()=>{ const v = (el.type==='checkbox') ? el.checked : el.value; saveSetting(key, transform(v)); updatePreviewDebounced(); };
   el.addEventListener(el.type==='checkbox' ? 'change' : 'input', handler);
-  // restore
   const sv = loadSetting(key, null);
   if(sv!==null){
     if(el.type==='checkbox') el.checked = !!sv; else el.value = sv;
   }
 }
 
-// setup
 function setup(){
   document.querySelectorAll('#tabBar .tab').forEach(t=> t.addEventListener('click', ()=> setActiveTab(t.dataset.tab)));
-  // restore tab
   const lastTab = loadSetting('ui.selectedTab', 'tab-text'); setActiveTab(lastTab);
-  // connect button
+  
   $('connectBtn').addEventListener('click', async ()=> { if(!printer.connected) await connect(); else await disconnect(); updatePreviewDebounced(); });
-  // wire inputs to persistence & immediate update
+
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=> wireSimple(k,k));
-  ['invertInput','imageInvert','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
-  // font increment/decrement
+  ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
+  
+  // Text input wiring (since it's now a textarea, standard wireSimple works but we ensure listener)
+  $('textInput').addEventListener('input', ()=>{ saveSetting('textInput', $('textInput').value); updatePreviewDebounced(); });
+  const savedText = loadSetting('textInput', null); if(savedText !== null) $('textInput').value = savedText;
+
   $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Number($('fontSize').value||36)+2; saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
   $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(6, Number($('fontSize').value||36)-2); saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
   $('fontPreset').addEventListener('change', ()=> { $('fontSize').value = $('fontPreset').value; saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
 
-  // image upload preview
   $('imageFile')?.addEventListener('change', (ev)=>{
     const f = ev.target.files && ev.target.files[0]; if(!f) { updatePreviewDebounced(); return; }
     const reader = new FileReader();
@@ -178,12 +222,10 @@ function setup(){
     reader.readAsDataURL(f);
   });
 
-  // detect label (placeholder alert)
   $('detectLabelBtn')?.addEventListener('click', async ()=>{
     alert('Auto Detect is currently a placeholder and not fully implemented.');
   });
 
-  // print
   $('fab-print').addEventListener('click', async ()=>{
     try{
       const active = document.querySelectorAll('.tab-content'); let shown = 'tab-text';
@@ -197,7 +239,11 @@ function setup(){
         await printCanvasObject(obj, copies, $('invertInput').checked);
       } else if (shown === 'tab-image'){
         const dataURL = $('imagePreview')?.dataset?.canvas; if(!dataURL) return alert('Please upload an image');
-        const img = new Image(); img.onload = async ()=>{ const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi); await printCanvasObject(obj, copies, $('imageInvert').checked); }; img.src = dataURL;
+        const img = new Image(); img.onload = async ()=>{ 
+           const dither = $('imageDither').checked;
+           const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, dither); 
+           await printCanvasObject(obj, copies, $('imageInvert').checked); 
+        }; img.src = dataURL;
       } else if (shown === 'tab-barcode'){
         const obj = renderBarcodeCanvas($('barcodeInput').value||'', $('barcodeType').value||'CODE128', Number($('barcodeScale').value||2), labelW, labelH, dpi);
         await printCanvasObject(obj, copies, false);
@@ -208,11 +254,18 @@ function setup(){
     }catch(e){ alert('Print failed: ' + e); console.error(e); }
   });
 
-  // initial restore of simple settings
+  // Presets wiring
+  updatePresetSelect();
+  $('savePresetBtn').addEventListener('click', saveCurrentAsPreset);
+  $('deletePresetBtn').addEventListener('click', deletePreset);
+  $('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
+
+  // Initial restore
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
     const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el){ if(el.type==='checkbox') el.checked = !!v; else el.value = v; } }
   });
-  ['invertInput','imageInvert','fontBold'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
+  ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
+  
   updatePreviewDebounced();
 }
 
