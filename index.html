@@ -142,29 +142,35 @@
         <input id="imageFile" type="file" accept="image/*" />
         
         <div class="control-group">
-          <!-- Left Block: Controls -->
-          <div class="control-block" style="flex:2">
-            <label for="imageThreshold" class="small">Threshold (Darkness detection)</label>
-            <input id="imageThreshold" type="range" min="0" max="255" value="128" style="width:100%;" />
-            
-            <div style="margin-top:12px;">
-               <label for="imageScale" class="small">Scale / Rotation</label>
-               <div class="row">
-                 <input id="imageScale" type="number" value="100" min="10" max="500" step="5" style="flex:1;" title="Scale Percentage" placeholder="%">
-                 <button id="imageRotateBtn" class="btn" style="background:#cbd5e1; color:#334155; flex:1; padding: 0.6rem; white-space: nowrap;">Rotate 90°</button>
+          
+          <!-- Row 1: Threshold + Dither + Invert -->
+          <div class="control-block" style="flex: 1 1 100%;">
+            <label for="imageThreshold" class="small">Threshold & Options</label>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+               <!-- Slider takes available space -->
+               <input id="imageThreshold" type="range" min="0" max="255" value="128" style="flex:1; min-width:120px;" />
+               
+               <!-- Options grouped together -->
+               <div style="display:flex; gap:12px;">
+                 <label class="row" style="cursor:pointer; user-select:none; white-space:nowrap;">
+                   <input id="imageDither" type="checkbox" /> <span style="font-size:0.9rem">Dither</span>
+                 </label>
+                 <label class="row" style="cursor:pointer; user-select:none; white-space:nowrap;">
+                   <input id="imageInvert" type="checkbox" /> <span style="font-size:0.9rem">Invert</span>
+                 </label>
                </div>
             </div>
           </div>
           
-          <!-- Right Block: Options -->
-          <div class="control-block" style="display:flex; flex-direction: column; justify-content: end; gap:12px; padding-bottom:4px;">
-             <label class="row" style="cursor:pointer; user-select:none;">
-               <input id="imageDither" type="checkbox" /> <span>Dither (Photos)</span>
-             </label>
-             <label class="row" style="cursor:pointer; user-select:none;">
-               <input id="imageInvert" type="checkbox" /> <span>Invert colors</span>
-             </label>
+          <!-- Row 2: Scale + Rotate -->
+          <div class="control-block" style="flex: 1 1 100%; margin-top:0;">
+             <label for="imageScale" class="small">Scale / Rotation</label>
+             <div class="row">
+               <input id="imageScale" type="number" value="100" min="10" max="500" step="5" style="flex:1;" placeholder="%" title="Scale Percentage">
+               <button id="imageRotateBtn" class="btn" style="background:#cbd5e1; color:#334155; flex:1; padding: 0.6rem; white-space: nowrap;">Rotate 90°</button>
+             </div>
           </div>
+
         </div>
         
         <!-- Hidden canvas for processing -->
@@ -287,6 +293,14 @@
           </div>
           
         </div>
+
+        <!-- Support Button -->
+        <div style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 20px; display: flex; justify-content: center;">
+            <a href="https://ko-fi.com/catdog58928" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background-color: #FF5E5B; color: white; border-radius: 999px; text-decoration: none; font-weight: 500; font-size: 0.9rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                Support this project
+            </a>
+        </div>
       </div>
 
       <!-- LOGS TAB -->
@@ -306,7 +320,6 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
       .then(reg => {
-         // Optional: Check for updates
          reg.addEventListener('updatefound', () => {
            const newWorker = reg.installing;
            newWorker.addEventListener('statechange', () => {
