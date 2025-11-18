@@ -25,7 +25,6 @@ function pushLog(msg) {
 export async function connect() {
   try {
     pushLog("Requesting Bluetooth device...");
-    // We request battery_service as optional. If device doesn't have it, it won't break connection.
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [
@@ -50,7 +49,7 @@ export async function connect() {
     const services = await printer.server.getPrimaryServices();
     for (const s of services) {
       try {
-        if (s.uuid.includes('180f')) continue; // Skip Battery for print search
+        if (s.uuid.includes('180f')) continue; 
         const chars = await s.getCharacteristics();
         for (const c of chars) {
           if (c.properties.write || c.properties.writeWithoutResponse) {
@@ -79,13 +78,14 @@ export async function connect() {
          battChar.addEventListener('characteristicvaluechanged', readBattery);
        }
     } catch(e) {
-       // D30 often does not support standard battery service. 
-       // We ignore this error so the app keeps working.
-       console.log("Battery info not available (expected for D30)");
+       // Expected for D30, fail silently
     }
 
   } catch (e) {
-    pushLog("Connect failed: " + e);
+    // Only log real connection errors, not cancellation
+    if (!e.toString().includes("User cancelled")) {
+       pushLog("Connect failed: " + e);
+    }
     updateConnUI(false);
   }
 }
@@ -142,92 +142,44 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   ctx.save();
   
-  // Rotation: Standard D30 prints along the tape.
-  // We rotate -90deg. The new X axis points UP the canvas. The new Y axis points RIGHT.
+  // --- Coordinate System Transformation ---
+  // D30 prints vertically. 
+  // X-axis (Length): 0 to heightPx (e.g., 320px for 40mm). This is the text flow direction.
+  // Y-axis (Width): 0 to widthPx (e.g., 96px for 12mm). This is the line stacking direction.
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
-  
-  // We center the text across the WIDTH (12mm) of the label.
-  // Since Y axis is now width, we use textBaseline="middle" at y = width/2.
-  ctx.textBaseline = "middle";
-  const y = widthPx / 2;
-
-  // We align the text lines along the LENGTH (40mm) of the label (X axis).
-  // To prevent overlap, we must calculate the start position of the Block,
-  // and then draw each line sequentially.
-  // We use textAlign="left" (Start) so that the text draws starting exactly at our calculated X.
-  // If we used "center", the line would center itself on X, causing misalignment if lines have different lengths.
-  ctx.textAlign = "left"; 
+  ctx.textBaseline = "middle"; // We center text vertically within its own line height
 
   const lines = text.split('\n');
-  const lineHeight = fontSize * 1.2;
-  const totalTextHeight = lines.length * lineHeight;
-  
-  // Calculate where the first line begins along the X axis
-  let startX = 0;
-  
-  // Calculate width of the longest line to support 'center' alignment of the BLOCK relative to the page
-  // Note: 'alignment' param is user preference (Top/Center/Bottom of label)
-  
+  const lineHeight = fontSize * 1.0; // Tighter spacing for label printing
+  const totalBlockHeight = lines.length * lineHeight;
+
+  // 1. X-Position (Alignment along the Length of the label)
+  let x = 0;
   if (alignment === 'left') {
-     // Top of label
-     startX = 10; 
+    ctx.textAlign = "left";
+    x = 10; // Padding from top
   } else if (alignment === 'right') {
-     // Bottom of label
-     startX = heightPx - 10 - totalTextHeight;
+    ctx.textAlign = "right";
+    x = heightPx - 10; // Padding from bottom
   } else {
-     // Center of label (default)
-     startX = (heightPx - totalTextHeight) / 2;
+    ctx.textAlign = "center";
+    x = heightPx / 2; // Center of label length
   }
 
-  // Draw each line
+  // 2. Y-Position (Stacking across the Width of the label)
+  // We center the entire block of text within the 12mm width.
+  // Start Y is the top of the text block.
+  const startY = (widthPx - totalBlockHeight) / 2;
+
   lines.forEach((line, i) => {
-    // Check for centering INDIVIDUAL lines within the block?
-    // No, usually labels are center-aligned.
-    // Since we set textAlign="left", we are drawing from startX.
-    // But if the user selected "Center" alignment, they usually expect the text to be centered.
-    // Since we are rotating, "Center" alignment usually refers to the vertical placement on the tape (Top/Mid/Bot).
-    // But horizontal centering (across the text width) is handled by the fact that X axis IS the text direction.
-    
-    // Actually, for a truly "Centered" look:
-    // We want the text block centered on the label length.
-    // AND we want the text lines centered relative to each other.
-    
-    // Improved Logic: Use textAlign = "center".
-    // But then `x` must be the CENTER of the line.
-    // So x = startX + (totalTextHeight/2)? No.
-    // x = The center point of the label length?
-    
-    // Let's revert to "center" logic but calculate the anchor correctly.
-    
-    if (alignment === 'center') {
-      ctx.textAlign = "center";
-      const centerX = heightPx / 2; // Center of label length
-      // Offset to top of the text block
-      const blockTop = centerX - (totalTextHeight / 2);
-      // Draw
-      const lineX = blockTop + (i * lineHeight) + (lineHeight/2); 
-      ctx.fillText(line, lineX, y);
-    } else {
-      // For Left/Right alignment, "left" textAlign makes sense (drawing from start point)
-      // But we actually want the text to "flow" correctly.
-      // Let's stick to "center" for the text anchor, but shift the anchor position.
-      
-      ctx.textAlign = "center";
-      let blockCenter = 0;
-      
-      if (alignment === 'left') { // Top of label
-         blockCenter = 10 + (totalTextHeight / 2);
-      } else if (alignment === 'right') { // Bottom of label
-         blockCenter = (heightPx - 10) - (totalTextHeight / 2);
-      }
-      
-      const lineX = (blockCenter - (totalTextHeight / 2)) + (i * lineHeight) + (lineHeight/2);
-      ctx.fillText(line, lineX, y);
-    }
+    // Calculate Y for this specific line
+    // startY + offset + half-line-height (because baseline is middle)
+    const y = startY + (i * lineHeight) + (lineHeight / 2);
+    ctx.fillText(line, x, y);
   });
 
   ctx.restore();
