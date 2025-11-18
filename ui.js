@@ -34,11 +34,20 @@ function placePreviewCanvas(sourceCanvas){
   const wrap = $('previewCanvasWrap');
   wrap.innerHTML='';
   
-  // Reduced size constraints (approx 40% smaller max dimensions)
-  const maxW = Math.min(400, window.innerWidth*0.8);
-  const maxH = Math.min(220, window.innerHeight*0.4);
+  // Dynamic Preview Scaling
+  // Instead of hardcoding 400px, we use the actual container width.
+  // We allow the preview to grow to fill the card.
   
-  const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
+  // Ensure wrap has a width (it might be 0 if hidden, but it shouldn't be).
+  // Fallback to window width minus padding if wrap is 0.
+  const availableW = wrap.clientWidth || (window.innerWidth - 40);
+  
+  // Restrict height reasonably so it doesn't push the entire page down too far
+  // But allow it to be larger than before.
+  const availableH = Math.min(500, window.innerHeight * 0.6);
+  
+  const scale = Math.min(availableW / sourceCanvas.width, availableH / sourceCanvas.height, 1);
+  
   const cv = document.createElement('canvas');
   
   // Ensure at least 1px
@@ -137,7 +146,7 @@ function setup(){
   $('connectBtn').addEventListener('click', async ()=> { if(!printer.connected) await connect(); else await disconnect(); updatePreviewDebounced(); });
   // wire inputs to persistence & immediate update
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=> wireSimple(k,k));
-  ['invertInput','imageInvert','fontBold','forceInvert'].forEach(k=> wireSimple(k,k, v=>v));
+  ['invertInput','imageInvert','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
   // font increment/decrement
   $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Number($('fontSize').value||36)+2; saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
   $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(6, Number($('fontSize').value||36)-2); saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
@@ -203,7 +212,7 @@ function setup(){
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
     const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el){ if(el.type==='checkbox') el.checked = !!v; else el.value = v; } }
   });
-  ['invertInput','imageInvert','fontBold','forceInvert'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
+  ['invertInput','imageInvert','fontBold'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
   updatePreviewDebounced();
 }
 
