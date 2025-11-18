@@ -169,13 +169,17 @@ function setup(){
     reader.readAsDataURL(f);
   });
 
-  // detect label (placeholder if not supported)
+  // detect label (placeholder alert)
   $('detectLabelBtn')?.addEventListener('click', async ()=>{
+    alert('Auto Detect is currently a placeholder and not fully implemented.');
+    // Original logic commented out for placeholder status:
+    /*
     try{
       const res = await detectLabel();
       if(res){ alert('Detected label width mm: ' + res); $('labelWidth').value = res; saveSetting('labelWidth', res); updatePreviewDebounced(); }
       else alert('Auto detect not available.');
     }catch(e){ alert('Detect failed: ' + e); }
+    */
   });
 
   // print
