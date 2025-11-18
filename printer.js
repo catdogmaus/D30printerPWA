@@ -45,7 +45,6 @@ export async function connect() {
     printer.server = await device.gatt.connect();
     pushLog("GATT connected");
     
-    // 1. Setup Printing Characteristic
     const services = await printer.server.getPrimaryServices();
     for (const s of services) {
       try {
@@ -67,7 +66,6 @@ export async function connect() {
       return;
     }
 
-    // 2. Setup Battery Status (Silent Fail)
     try {
        const battService = await printer.server.getPrimaryService('battery_service');
        const battChar = await battService.getCharacteristic('battery_level');
@@ -77,12 +75,9 @@ export async function connect() {
          await battChar.startNotifications();
          battChar.addEventListener('characteristicvaluechanged', readBattery);
        }
-    } catch(e) {
-       // Expected for D30, fail silently
-    }
+    } catch(e) {}
 
   } catch (e) {
-    // Only log real connection errors, not cancellation
     if (!e.toString().includes("User cancelled")) {
        pushLog("Connect failed: " + e);
     }
@@ -141,43 +136,32 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
 export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
   ctx.save();
-  
-  // --- Coordinate System Transformation ---
-  // D30 prints vertically. 
-  // X-axis (Length): 0 to heightPx (e.g., 320px for 40mm). This is the text flow direction.
-  // Y-axis (Width): 0 to widthPx (e.g., 96px for 12mm). This is the line stacking direction.
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
-  ctx.textBaseline = "middle"; // We center text vertically within its own line height
+  ctx.textBaseline = "middle"; 
 
   const lines = text.split('\n');
-  const lineHeight = fontSize * 1.0; // Tighter spacing for label printing
+  const lineHeight = fontSize * 1.0; 
   const totalBlockHeight = lines.length * lineHeight;
 
-  // 1. X-Position (Alignment along the Length of the label)
   let x = 0;
   if (alignment === 'left') {
     ctx.textAlign = "left";
-    x = 10; // Padding from top
+    x = 10; 
   } else if (alignment === 'right') {
     ctx.textAlign = "right";
-    x = heightPx - 10; // Padding from bottom
+    x = heightPx - 10; 
   } else {
     ctx.textAlign = "center";
-    x = heightPx / 2; // Center of label length
+    x = heightPx / 2; 
   }
 
-  // 2. Y-Position (Stacking across the Width of the label)
-  // We center the entire block of text within the 12mm width.
-  // Start Y is the top of the text block.
   const startY = (widthPx - totalBlockHeight) / 2;
 
   lines.forEach((line, i) => {
-    // Calculate Y for this specific line
-    // startY + offset + half-line-height (because baseline is middle)
     const y = startY + (i * lineHeight) + (lineHeight / 2);
     ctx.fillText(line, x, y);
   });
@@ -186,18 +170,41 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
-export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false) {
+export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false, rotation=0) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
-  const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
-  const dw = image.width * ratio;
-  const dh = image.height * ratio;
+  
+  // 1. Handle User Rotation (Intermediate Step)
+  let srcImage = image;
+  if (rotation !== 0) {
+     const rotCanvas = document.createElement('canvas');
+     // Swap dimensions for 90/270
+     if (rotation % 180 !== 0) {
+       rotCanvas.width = image.height;
+       rotCanvas.height = image.width;
+     } else {
+       rotCanvas.width = image.width;
+       rotCanvas.height = image.height;
+     }
+     const rctx = rotCanvas.getContext('2d');
+     // Move origin to center, rotate, draw image centered
+     rctx.translate(rotCanvas.width/2, rotCanvas.height/2);
+     rctx.rotate(rotation * Math.PI / 180);
+     rctx.drawImage(image, -image.width/2, -image.height/2);
+     srcImage = rotCanvas;
+  }
+
+  // 2. Draw image scaled
+  const ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
+  const dw = srcImage.width * ratio;
+  const dh = srcImage.height * ratio;
   
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
-  ctx.drawImage(image, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
+  ctx.drawImage(srcImage, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
 
+  // 3. Processing (Dither/Threshold/Invert)
   const w = canvas.width;
   const h = canvas.height;
   const imgData = ctx.getImageData(0, 0, w, h);
