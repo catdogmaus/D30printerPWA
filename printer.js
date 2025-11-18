@@ -92,6 +92,7 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   canvas.width = alignedWidth;
   canvas.height = heightPx;
   const ctx = canvas.getContext('2d');
+  // Base fill
   ctx.fillStyle = invert ? "#000000" : "#FFFFFF";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
@@ -117,15 +118,57 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
 }
 
 export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8) {
-  const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
+  const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
+  
+  // 1. Draw the image normally (scaled to fit)
   const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
   const dw = image.width * ratio;
   const dh = image.height * ratio;
+  
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
+  // Draw image centered
   ctx.drawImage(image, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
+
+  // 2. Apply Threshold & Invert logic to the actual pixels
+  // This ensures the preview looks like the monochrome print.
+  const w = canvas.width;
+  const h = canvas.height;
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  
+  for (let i = 0; i < d.length; i += 4) {
+    // Luminance formula
+    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    
+    // Threshold check:
+    // If pixel is dark (gray < threshold), it should be "on".
+    // Standard: "On" = Black (0,0,0). "Off" = White (255,255,255).
+    // If Invert is checked: "On" = White, "Off" = Black.
+    
+    let isDark = gray < threshold;
+    
+    // Logic:
+    // if (!invert): isDark -> Black. !isDark -> White.
+    // if (invert):  isDark -> White. !isDark -> Black.
+    
+    let finalVal = 255; // Default white
+    if (!invert) {
+       if (isDark) finalVal = 0; // Make it black
+    } else {
+       if (!isDark) finalVal = 0; // Invert: Light areas become black
+    }
+    
+    d[i] = finalVal;
+    d[i + 1] = finalVal;
+    d[i + 2] = finalVal;
+    d[i + 3] = 255; // Fully opaque
+  }
+  
+  ctx.putImageData(imgData, 0, 0);
+
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
@@ -151,15 +194,32 @@ export function renderBarcodeCanvas(value, type='CODE128', scale=2, labelWidthMM
 export async function renderQRCanvas(value, size=256, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const qrCanvas = document.createElement('canvas');
-  await QRCode.toCanvas(qrCanvas, value, { width: Math.min(size, 512) });
-  const ratio = Math.min(heightPx / qrCanvas.width, widthPx / qrCanvas.height);
-  const dw = qrCanvas.width * ratio;
-  const dh = qrCanvas.height * ratio;
+  
+  // Generate QR at requested size
+  await QRCode.toCanvas(qrCanvas, value, { width: size, margin: 0 });
+  
+  // Rotated Dimensions on the final canvas:
+  // The label length (heightPx) acts as the horizontal space in the rotated context.
+  // The label width (widthPx) acts as the vertical space in the rotated context.
+  const availableW = heightPx; 
+  const availableH = widthPx; 
+
+  // Determine scale:
+  // If the QR size is bigger than the label, scale down to fit.
+  // If it's smaller, KEEP IT 1:1 (scale = 1), do not stretch.
+  const scale = Math.min(1, availableW / qrCanvas.width, availableH / qrCanvas.height);
+  
+  const dw = qrCanvas.width * scale;
+  const dh = qrCanvas.height * scale;
+  
   ctx.save();
   ctx.translate(0, heightPx);
   ctx.rotate(-Math.PI / 2);
-  ctx.drawImage(qrCanvas, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
+  
+  // Draw centered using the calculated dimensions
+  ctx.drawImage(qrCanvas, (availableW - dw)/2, (availableH - dh)/2, dw, dh);
   ctx.restore();
+  
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
@@ -173,6 +233,9 @@ export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
     for (let x = 0; x < w; x++) {
       const idx = (y * w + x) * 4;
       const r = img[idx];
+      // Since we pre-processed the image in renderImageCanvas, pixels are already 0 or 255.
+      // Standard threshold here just maps them to bits.
+      // Note: If the canvas was NOT pre-processed (like Text or Barcode), this still works using 128 split.
       let isBlack = r < 128;
       if (invert) isBlack = !isBlack;
       if (isBlack) out[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
@@ -208,61 +271,4 @@ async function writeChunks(u8) {
   }
 }
 
-export async function printCanvasObject(canvasObj, copies = 1, invert = false) {
-  if (!printer.characteristic) throw new Error("Not connected");
-  const { canvas, bytesPerRow, heightPx } = canvasObj;
-  let bitmap = canvasToBitmap(canvas, bytesPerRow, invert);
-  if (printer.settings.forceInvert) {
-    const inv = new Uint8Array(bitmap.length);
-    for (let i = 0; i < bitmap.length; i++) inv[i] = (~bitmap[i]) & 0xFF;
-    bitmap = inv;
-  }
-  const packet = buildPacketFromBitmap(bitmap, bytesPerRow, heightPx);
-  for (let i = 0; i < copies; i++) {
-    await writeChunks(packet);
-    await new Promise(r => setTimeout(r, 300));
-  }
-  pushLog("Printing done");
-}
-
-export function makePreviewFromPrintCanvas(printCanvas) {
-  const src = printCanvas;
-  const preview = document.createElement('canvas');
-  preview.width = src.height;
-  preview.height = src.width;
-  const ctx = preview.getContext('2d');
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, preview.width, preview.height);
-  ctx.save();
-  ctx.translate(preview.width, 0);
-  ctx.rotate(Math.PI / 2);
-  ctx.drawImage(src, 0, 0);
-  ctx.restore();
-  return preview;
-}
-
-export async function detectLabel() {
-  if (!printer.server) throw new Error("Not connected");
-  try {
-    const svcs = await printer.server.getPrimaryServices();
-    for (const s of svcs) {
-      try {
-        const chars = await s.getCharacteristics();
-        for (const c of chars) {
-          try {
-            const v = await c.readValue();
-            if (v && v.byteLength >= 1) {
-              const b0 = v.getUint8(0);
-              if (b0 >= 8 && b0 <= 60) {
-                printer.settings.labelWidthMM = b0;
-                pushLog("Detected label width mm: " + b0);
-                return b0;
-              }
-            }
-          } catch (e) {}
-        }
-      } catch (e) {}
-    }
-  } catch (e) {}
-  return null;
-}
+export async function printCanvasObject(canvasObj, copies = 1
