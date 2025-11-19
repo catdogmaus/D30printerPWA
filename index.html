@@ -14,8 +14,7 @@
   <style>
     /* Liquid Glass Theme Variables */
     :root {
-      /* Darkened glass background for better contrast with white inputs */
-      --glass-bg: rgba(240, 244, 248, 0.75);
+      var(--glass-bg: rgba(240, 244, 248, 0.75);
       --glass-border: rgba(255, 255, 255, 0.8);
       --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
       --primary: #3b82f6;
@@ -40,7 +39,7 @@
     /* Glass Header */
     header {
       padding: 12px 0;
-      background: rgba(255, 255, 255, 0.75); /* Keep header slightly lighter */
+      background: rgba(255, 255, 255, 0.75);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--glass-border);
@@ -51,7 +50,7 @@
 
     .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-    /* Glass Card - Darkened for Contrast */
+    /* Glass Card */
     .card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
@@ -73,11 +72,12 @@
       background: white;
     }
 
-    /* Tabs Layout */
+    /* Tabs Layout - Updated Alignment */
     .tab-row { 
       display: flex; 
       justify-content: space-between; 
-      align-items: center; 
+      /* Fix: baseline aligns text perfectly across different container types */
+      align-items: baseline; 
       margin-top: 1rem; 
       flex-wrap: wrap; 
       gap: 12px; 
@@ -121,10 +121,10 @@
     }
     .fab:active { transform: scale(0.95); }
 
-    /* Glass Inputs - Whiter for Contrast */
+    /* Glass Inputs */
     input, select, textarea, .glass-input {
       padding: 0.7rem;
-      background: rgba(255, 255, 255, 0.9); /* More opaque white */
+      background: rgba(255, 255, 255, 0.9);
       border: 1px solid rgba(255, 255, 255, 0.6);
       border-radius: 10px;
       width: 100%;
@@ -183,16 +183,16 @@
     }
     button.btn:active { transform: translateY(1px); }
     
-    /* Copies Input Wrapper - Fixed Alignment */
+    /* Copies Input Wrapper - Sizing Update */
     .copies-wrapper {
         display: flex;
         align-items: center;
         gap: 10px;
-        background: rgba(255, 255, 255, 0.6); /* Slightly lighter than tabs to stand out */
-        padding: 0.5rem 0.8rem; /* Match tab padding height approx */
-        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.6);
+        /* Padding matches .tab (0.6rem top/bottom) for consistent height */
+        padding: 0.6rem 1rem; 
+        border-radius: 6px;
         border: 1px solid var(--glass-border);
-        height: 100%;
     }
     
     /* Layout Utils */
