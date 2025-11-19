@@ -20,8 +20,49 @@ function loadSetting(k,def){const v=localStorage.getItem(k); if(!v) return def; 
 
 let previewTimer=null;
 const DEBOUNCE=160;
-// Track image rotation (0, 90, 180, 270)
 let imageRotation = 0;
+
+// --- Custom Font Logic ---
+async function handleCustomFont(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      // Load font into browser
+      const fontData = e.target.result;
+      const fontName = 'CustomFont_' + Date.now(); // Unique name
+      const fontFace = new FontFace(fontName, fontData);
+      await fontFace.load();
+      document.fonts.add(fontFace);
+      
+      // Update Dropdown
+      const sel = $('fontFamily');
+      // Remove old custom option if exists
+      const oldOpt = sel.querySelector('option[data-custom="true"]');
+      if(oldOpt) oldOpt.remove();
+      
+      const opt = document.createElement('option');
+      opt.value = fontName;
+      opt.textContent = 'Custom: ' + file.name;
+      opt.selected = true;
+      opt.dataset.custom = "true";
+      
+      // Insert before the "Load..." option
+      sel.insertBefore(opt, sel.lastElementChild);
+      
+      // Trigger update
+      saveSetting('fontFamily', fontName); // Note: Persisting the NAME only works for session usually, unless we cache the file (too complex for localStorage).
+      // Ideally we warn user that custom font is session-only, or we simply accept it resets on reload.
+      updatePreviewDebounced();
+      alert('Custom font loaded!');
+    } catch(err) {
+      alert('Failed to load font: ' + err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
 
 // --- Presets Logic ---
 function updatePresetSelect() {
@@ -62,7 +103,16 @@ function loadPreset(name) {
     if (p.labelWidth) $('labelWidth').value = p.labelWidth;
     if (p.labelLength) $('labelLength').value = p.labelLength;
     if (p.fontSize) $('fontSize').value = p.fontSize;
-    if (p.fontFamily) $('fontFamily').value = p.fontFamily;
+    
+    // Font Family check: If preset uses a custom font that isn't loaded in this session, fallback.
+    const sel = $('fontFamily');
+    let fontExists = false;
+    for(let i=0; i<sel.options.length; i++) {
+        if(sel.options[i].value === p.fontFamily) fontExists = true;
+    }
+    if (p.fontFamily && fontExists) $('fontFamily').value = p.fontFamily;
+    else if (p.fontFamily && !fontExists) console.warn('Preset font not found (custom?), using default');
+
     if (p.alignment) $('alignment').value = p.alignment;
     if (p.fontBold !== undefined) $('fontBold').checked = p.fontBold;
     
@@ -143,7 +193,6 @@ async function updatePreview(){
           const invert = $('imageInvert').checked;
           const dither = $('imageDither').checked;
           const scalePct = Number($('imageScale').value || 100);
-          // Pass rotation and scale here
           const obj2 = renderImageCanvas(img, Number($('imageThreshold').value||128), invert, labelW, labelH, dpi, dither, imageRotation, scalePct);
           const p = makePreviewFromPrintCanvas(obj2.canvas);
           placePreviewCanvas(p);
@@ -159,7 +208,8 @@ async function updatePreview(){
     } else if (shown === 'tab-barcode') {
       obj = renderBarcodeCanvas($('barcodeInput').value||'', $('barcodeType').value||'CODE128', Number($('barcodeScale').value||2), labelW, labelH, dpi);
     } else if (shown === 'tab-qr') {
-      obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||256), labelW, labelH, dpi);
+      // Update default to 70 if empty or old value
+      obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||70), labelW, labelH, dpi);
     } else {
       obj = renderTextCanvas($('textInput').value||'', Number($('fontSize').value||36), $('alignment').value||'center', $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily);
     }
@@ -188,7 +238,14 @@ function setup(){
   
   $('connectBtn').addEventListener('click', async ()=> { if(!printer.connected) await connect(); else await disconnect(); updatePreviewDebounced(); });
 
-  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=> wireSimple(k,k));
+  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=>{
+     // Handle QR default specifically if strictly missing
+     if (k === 'qrSize' && !localStorage.getItem('qrSize')) {
+        $('qrSize').value = 70;
+        saveSetting('qrSize', 70);
+     }
+     wireSimple(k,k);
+  });
   ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
   
   $('textInput').addEventListener('input', ()=>{ saveSetting('textInput', $('textInput').value); updatePreviewDebounced(); });
@@ -198,12 +255,20 @@ function setup(){
   $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(6, Number($('fontSize').value||36)-2); saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
   $('fontPreset').addEventListener('change', ()=> { $('fontSize').value = $('fontPreset').value; saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
 
+  // Font Family Custom Logic
+  $('fontFamily').addEventListener('change', (e)=>{
+     if(e.target.value === 'custom_load') {
+        $('customFontFile').click();
+        // Reset select to previous or default until loaded, effectively handled by logic or refresh
+     }
+  });
+  $('customFontFile').addEventListener('change', handleCustomFont);
+
   $('imageFile')?.addEventListener('change', (ev)=>{
     const f = ev.target.files && ev.target.files[0]; if(!f) { updatePreviewDebounced(); return; }
     const reader = new FileReader();
     reader.onload = ()=>{
       const img = new Image(); img.onload = ()=>{
-        // Reset rotation on new image load
         imageRotation = 0; 
         const labelW = Number($('labelWidth').value||printer.settings.labelWidthMM);
         const labelH = Number($('labelLength').value||printer.settings.labelLengthMM);
@@ -225,7 +290,6 @@ function setup(){
     reader.readAsDataURL(f);
   });
 
-  // Rotation wiring
   $('imageRotateBtn')?.addEventListener('click', ()=>{
     imageRotation = (imageRotation + 90) % 360;
     updatePreviewDebounced();
@@ -251,7 +315,6 @@ function setup(){
         const img = new Image(); img.onload = async ()=>{ 
            const dither = $('imageDither').checked;
            const scalePct = Number($('imageScale').value || 100);
-           // Pass rotation and scale here too
            const obj = renderImageCanvas(img, Number($('imageThreshold').value||128), $('imageInvert').checked, labelW, labelH, dpi, dither, imageRotation, scalePct); 
            await printCanvasObject(obj, copies, $('imageInvert').checked); 
         }; img.src = dataURL;
@@ -259,7 +322,7 @@ function setup(){
         const obj = renderBarcodeCanvas($('barcodeInput').value||'', $('barcodeType').value||'CODE128', Number($('barcodeScale').value||2), labelW, labelH, dpi);
         await printCanvasObject(obj, copies, false);
       } else if (shown === 'tab-qr'){
-        const obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||256), labelW, labelH, dpi);
+        const obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||70), labelW, labelH, dpi);
         await printCanvasObject(obj, copies, false);
       }
     }catch(e){ alert('Print failed: ' + e); console.error(e); }
@@ -269,11 +332,6 @@ function setup(){
   $('savePresetBtn').addEventListener('click', saveCurrentAsPreset);
   $('deletePresetBtn').addEventListener('click', deletePreset);
   $('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
-
-  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','copiesInput'].forEach(k=>{
-    const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el){ if(el.type==='checkbox') el.checked = !!v; else el.value = v; } }
-  });
-  ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=>{ const v = loadSetting(k, null); if(v!==null){ const el = $(k); if(el) el.checked = !!v; }});
   
   updatePreviewDebounced();
 }
