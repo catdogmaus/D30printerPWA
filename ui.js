@@ -39,7 +39,6 @@ async function handleCustomFont(ev) {
       
       // Update Dropdown
       const sel = $('fontFamily');
-      // Remove old custom option if exists
       const oldOpt = sel.querySelector('option[data-custom="true"]');
       if(oldOpt) oldOpt.remove();
       
@@ -49,12 +48,9 @@ async function handleCustomFont(ev) {
       opt.selected = true;
       opt.dataset.custom = "true";
       
-      // Insert before the "Load..." option
       sel.insertBefore(opt, sel.lastElementChild);
       
-      // Trigger update
-      saveSetting('fontFamily', fontName); // Note: Persisting the NAME only works for session usually, unless we cache the file (too complex for localStorage).
-      // Ideally we warn user that custom font is session-only, or we simply accept it resets on reload.
+      saveSetting('fontFamily', fontName); 
       updatePreviewDebounced();
       alert('Custom font loaded!');
     } catch(err) {
@@ -88,7 +84,8 @@ function saveCurrentAsPreset() {
     fontSize: $('fontSize').value,
     fontFamily: $('fontFamily').value,
     alignment: $('alignment').value,
-    fontBold: $('fontBold').checked
+    fontBold: $('fontBold').checked,
+    frameStyle: $('frameStyle').value
   };
   
   saveSetting('userPresets', presets);
@@ -104,16 +101,15 @@ function loadPreset(name) {
     if (p.labelLength) $('labelLength').value = p.labelLength;
     if (p.fontSize) $('fontSize').value = p.fontSize;
     
-    // Font Family check: If preset uses a custom font that isn't loaded in this session, fallback.
     const sel = $('fontFamily');
     let fontExists = false;
     for(let i=0; i<sel.options.length; i++) {
         if(sel.options[i].value === p.fontFamily) fontExists = true;
     }
     if (p.fontFamily && fontExists) $('fontFamily').value = p.fontFamily;
-    else if (p.fontFamily && !fontExists) console.warn('Preset font not found (custom?), using default');
 
     if (p.alignment) $('alignment').value = p.alignment;
+    if (p.frameStyle) $('frameStyle').value = p.frameStyle;
     if (p.fontBold !== undefined) $('fontBold').checked = p.fontBold;
     
     saveSetting('labelWidth', p.labelWidth);
@@ -182,9 +178,11 @@ async function updatePreview(){
       const align = $('alignment').value || 'center';
       const invert = $('invertInput').checked;
       const bold = $('fontBold') && $('fontBold').checked;
+      const frame = $('frameStyle').value;
       const ff = $('fontFamily') ? $('fontFamily').value : printer.settings.fontFamily;
       const fontFamily = bold ? ff + ' bold' : ff;
-      obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi, fontFamily);
+      // Pass frameStyle here
+      obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi, fontFamily, frame);
     } else if (shown === 'tab-image') {
       const cdata = $('imagePreview') && $('imagePreview').dataset && $('imagePreview').dataset.canvas;
       if(cdata){
@@ -208,7 +206,6 @@ async function updatePreview(){
     } else if (shown === 'tab-barcode') {
       obj = renderBarcodeCanvas($('barcodeInput').value||'', $('barcodeType').value||'CODE128', Number($('barcodeScale').value||2), labelW, labelH, dpi);
     } else if (shown === 'tab-qr') {
-      // Update default to 70 if empty or old value
       obj = await renderQRCanvas($('qrInput').value||'', Number($('qrSize').value||70), labelW, labelH, dpi);
     } else {
       obj = renderTextCanvas($('textInput').value||'', Number($('fontSize').value||36), $('alignment').value||'center', $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily);
@@ -238,8 +235,7 @@ function setup(){
   
   $('connectBtn').addEventListener('click', async ()=> { if(!printer.connected) await connect(); else await disconnect(); updatePreviewDebounced(); });
 
-  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput'].forEach(k=>{
-     // Handle QR default specifically if strictly missing
+  ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput','frameStyle'].forEach(k=>{
      if (k === 'qrSize' && !localStorage.getItem('qrSize')) {
         $('qrSize').value = 70;
         saveSetting('qrSize', 70);
@@ -255,11 +251,9 @@ function setup(){
   $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(6, Number($('fontSize').value||36)-2); saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
   $('fontPreset').addEventListener('change', ()=> { $('fontSize').value = $('fontPreset').value; saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
 
-  // Font Family Custom Logic
   $('fontFamily').addEventListener('change', (e)=>{
      if(e.target.value === 'custom_load') {
         $('customFontFile').click();
-        // Reset select to previous or default until loaded, effectively handled by logic or refresh
      }
   });
   $('customFontFile').addEventListener('change', handleCustomFont);
@@ -308,7 +302,8 @@ function setup(){
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value||1);
       if(shown === 'tab-text'){
-        const obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily);
+        // Pass frameStyle here
+        const obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily, $('frameStyle').value);
         await printCanvasObject(obj, copies, $('invertInput').checked);
       } else if (shown === 'tab-image'){
         const dataURL = $('imagePreview')?.dataset?.canvas; if(!dataURL) return alert('Please upload an image');
