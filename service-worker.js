@@ -1,4 +1,4 @@
-const CACHE_NAME = 'd30-pwa-v2'; // Incremented version to force update
+const CACHE_NAME = 'd30-pwa-v4'; // Incremented version to force update
 const ASSETS = [
   './',
   './index.html',
