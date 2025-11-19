@@ -137,7 +137,6 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
 function drawFrame(ctx, width, height, style, invert) {
   if (!style || style === 'none') return;
   
-  // Safety margin (e.g. 8px approx 1mm)
   const margin = 8; 
   const x = margin;
   const y = margin;
@@ -156,47 +155,81 @@ function drawFrame(ctx, width, height, style, invert) {
     ctx.strokeRect(x, y, w, h);
   } else if (style === 'rounded') {
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 20); // 20px radius
+    ctx.roundRect(x, y, w, h, 20); 
     ctx.stroke();
   } else if (style === 'double') {
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, w, h);
     ctx.strokeRect(x + 6, y + 6, w - 12, h - 12);
   } else if (style === 'dashed') {
-    ctx.setLineDash([15, 10]); // 15px line, 10px gap
+    ctx.setLineDash([15, 10]); 
     ctx.strokeRect(x, y, w, h);
   } else if (style === 'ticket') {
-    // Box with circle cutouts
+    // Corrected Ticket Path
+    const r = 15; 
     ctx.beginPath();
-    // Top line
-    ctx.moveTo(x + 20, y);
-    ctx.lineTo(x + w - 20, y);
-    // Right cutout
-    ctx.arc(x + w, y + h/2, 15, 1.5*Math.PI, 0.5*Math.PI, true);
-    // Bottom line
-    ctx.lineTo(x + 20, y + h);
-    // Left cutout
-    ctx.arc(x, y + h/2, 15, 0.5*Math.PI, 1.5*Math.PI, true);
+    // Top Left
+    ctx.moveTo(x, y);
+    // Top Edge
+    ctx.lineTo(x + w, y);
+    // Right Side (Top half)
+    ctx.lineTo(x + w, y + h/2 - r);
+    // Right Notch (Inward Arc)
+    ctx.arc(x + w, y + h/2, r, 1.5 * Math.PI, 0.5 * Math.PI, true);
+    // Right Side (Bottom half)
+    ctx.lineTo(x + w, y + h);
+    // Bottom Edge
+    ctx.lineTo(x, y + h);
+    // Left Side (Bottom half)
+    ctx.lineTo(x, y + h/2 + r);
+    // Left Notch (Inward Arc)
+    ctx.arc(x, y + h/2, r, 0.5 * Math.PI, 1.5 * Math.PI, true);
+    // Close to Top Left
     ctx.closePath();
     ctx.stroke();
+  } else if (style === 'cut_corners' || style === 'cut_corners_double') {
+      const r = 15; 
+      const drawPath = (inset) => {
+         const ix = x + inset;
+         const iy = y + inset;
+         const iw = w - 2*inset;
+         const ih = h - 2*inset;
+         ctx.beginPath();
+         ctx.moveTo(ix + r, iy);
+         ctx.lineTo(ix + iw - r, iy);
+         ctx.arc(ix + iw, iy, r, Math.PI, 0.5*Math.PI, true); // Top Right
+         ctx.lineTo(ix + iw, iy + ih - r);
+         ctx.arc(ix + iw, iy + ih, r, 1.5*Math.PI, Math.PI, true); // Bot Right
+         ctx.lineTo(ix + r, iy + ih);
+         ctx.arc(ix, iy + ih, r, 0, 1.5*Math.PI, true); // Bot Left
+         ctx.lineTo(ix, iy + r);
+         ctx.arc(ix, iy, r, 0.5*Math.PI, 0, true); // Top Left
+         ctx.closePath();
+         ctx.stroke();
+      };
+
+      if (style === 'cut_corners') {
+         ctx.lineWidth = 4;
+         drawPath(0);
+      } else {
+         ctx.lineWidth = 6; // Outer thick
+         drawPath(0);
+         ctx.lineWidth = 2; // Inner thin
+         drawPath(6); 
+      }
   } else if (style === 'brackets') {
     ctx.lineWidth = 6;
-    const len = Math.min(w, h) / 3; // length of bracket leg
+    const len = Math.min(w, h) / 3; 
     ctx.beginPath();
-    // Top-Left
     ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
-    // Top-Right
     ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
-    // Bottom-Right
     ctx.moveTo(x + w, y + h - len); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - len, y + h);
-    // Bottom-Left
     ctx.moveTo(x + len, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - len);
     ctx.stroke();
   }
   
   ctx.restore();
 }
-// ---------------------------
 
 export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif', frameStyle='none') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
@@ -205,8 +238,6 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
-  // DRAW FRAME FIRST (Background layer)
-  // Note: Inside this context, Width = HeightPx (label length), Height = WidthPx (label width)
   drawFrame(ctx, heightPx, widthPx, frameStyle, invert);
 
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
