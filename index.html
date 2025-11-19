@@ -14,7 +14,8 @@
   <style>
     /* Liquid Glass Theme Variables */
     :root {
-      --glass-bg: rgba(255, 255, 255, 0.65);
+      /* Darkened glass background for better contrast with white inputs */
+      --glass-bg: rgba(240, 244, 248, 0.75);
       --glass-border: rgba(255, 255, 255, 0.8);
       --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
       --primary: #3b82f6;
@@ -39,7 +40,7 @@
     /* Glass Header */
     header {
       padding: 12px 0;
-      background: var(--glass-bg);
+      background: rgba(255, 255, 255, 0.75); /* Keep header slightly lighter */
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--glass-border);
@@ -50,7 +51,7 @@
 
     .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-    /* Glass Card */
+    /* Glass Card - Darkened for Contrast */
     .card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
@@ -68,7 +69,6 @@
       width: auto; 
       height: auto; 
       border-radius: 8px; 
-      /* Clean shadow for the "paper" look */
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       background: white;
     }
@@ -88,8 +88,8 @@
     /* Glass Tabs */
     .tab {
       padding: 0.6rem 1.2rem;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.4);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.5);
       border: 1px solid var(--glass-border);
       cursor: pointer;
       font-weight: 500;
@@ -97,10 +97,10 @@
       transition: all 0.2s ease;
     }
     
-    .tab:hover { background: rgba(255,255,255,0.7); }
+    .tab:hover { background: rgba(255,255,255,0.8); }
     
     .tab.active {
-      background: rgba(59, 130, 246, 0.1);
+      background: rgba(59, 130, 246, 0.15);
       color: var(--primary);
       border-color: rgba(59, 130, 246, 0.3);
       box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
@@ -110,8 +110,8 @@
     .fab {
       position: fixed; right: 20px; bottom: 24px; 
       width: 64px; height: 64px; 
-      border-radius: 20px; /* Squircle */
-      background: #10b981; /* Emerald */
+      border-radius: 20px; 
+      background: #10b981; 
       color: white; 
       display: flex; align-items: center; justify-content: center; 
       box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3); 
@@ -121,10 +121,10 @@
     }
     .fab:active { transform: scale(0.95); }
 
-    /* Glass Inputs */
+    /* Glass Inputs - Whiter for Contrast */
     input, select, textarea, .glass-input {
       padding: 0.7rem;
-      background: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.9); /* More opaque white */
       border: 1px solid rgba(255, 255, 255, 0.6);
       border-radius: 10px;
       width: 100%;
@@ -137,7 +137,7 @@
     
     input:focus, select:focus, textarea:focus {
       outline: none;
-      background: rgba(255, 255, 255, 0.8);
+      background: #ffffff;
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
@@ -183,15 +183,16 @@
     }
     button.btn:active { transform: translateY(1px); }
     
-    /* Copies Input Wrapper - Alignment Fix */
+    /* Copies Input Wrapper - Fixed Alignment */
     .copies-wrapper {
         display: flex;
         align-items: center;
         gap: 10px;
-        background: rgba(255, 255, 255, 0.4);
-        padding: 4px 8px 4px 12px;
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.6); /* Slightly lighter than tabs to stand out */
+        padding: 0.5rem 0.8rem; /* Match tab padding height approx */
+        border-radius: 8px;
         border: 1px solid var(--glass-border);
+        height: 100%;
     }
     
     /* Layout Utils */
@@ -245,7 +246,7 @@
         <div class="tab" data-tab="tab-logs">Logs</div>
       </div>
       
-      <!-- Global Copies Input (Aligned in Glass Wrapper) -->
+      <!-- Global Copies Input -->
       <div class="copies-wrapper">
         <label for="copiesInput" class="small" style="margin:0; font-weight:500;">Copies</label>
         <input id="copiesInput" type="number" value="1" min="1" style="width:60px; text-align:center; padding:0.4rem; border:none; background: rgba(255,255,255,0.5); box-shadow:inset 0 1px 3px rgba(0,0,0,0.05);" />
