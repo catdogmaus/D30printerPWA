@@ -133,12 +133,82 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif') {
+// --- Frame Drawing Logic ---
+function drawFrame(ctx, width, height, style, invert) {
+  if (!style || style === 'none') return;
+  
+  // Safety margin (e.g. 8px approx 1mm)
+  const margin = 8; 
+  const x = margin;
+  const y = margin;
+  const w = width - (margin * 2);
+  const h = height - (margin * 2);
+  
+  ctx.save();
+  ctx.strokeStyle = invert ? "#FFFFFF" : "#000000";
+  ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
+  ctx.lineWidth = 4;
+
+  if (style === 'simple') {
+    ctx.strokeRect(x, y, w, h);
+  } else if (style === 'thick') {
+    ctx.lineWidth = 8;
+    ctx.strokeRect(x, y, w, h);
+  } else if (style === 'rounded') {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 20); // 20px radius
+    ctx.stroke();
+  } else if (style === 'double') {
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.strokeRect(x + 6, y + 6, w - 12, h - 12);
+  } else if (style === 'dashed') {
+    ctx.setLineDash([15, 10]); // 15px line, 10px gap
+    ctx.strokeRect(x, y, w, h);
+  } else if (style === 'ticket') {
+    // Box with circle cutouts
+    ctx.beginPath();
+    // Top line
+    ctx.moveTo(x + 20, y);
+    ctx.lineTo(x + w - 20, y);
+    // Right cutout
+    ctx.arc(x + w, y + h/2, 15, 1.5*Math.PI, 0.5*Math.PI, true);
+    // Bottom line
+    ctx.lineTo(x + 20, y + h);
+    // Left cutout
+    ctx.arc(x, y + h/2, 15, 0.5*Math.PI, 1.5*Math.PI, true);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (style === 'brackets') {
+    ctx.lineWidth = 6;
+    const len = Math.min(w, h) / 3; // length of bracket leg
+    ctx.beginPath();
+    // Top-Left
+    ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
+    // Top-Right
+    ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
+    // Bottom-Right
+    ctx.moveTo(x + w, y + h - len); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - len, y + h);
+    // Bottom-Left
+    ctx.moveTo(x + len, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - len);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+// ---------------------------
+
+export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif', frameStyle='none') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
+  
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
+  // DRAW FRAME FIRST (Background layer)
+  // Note: Inside this context, Width = HeightPx (label length), Height = WidthPx (label width)
+  drawFrame(ctx, heightPx, widthPx, frameStyle, invert);
+
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
   ctx.textBaseline = "middle"; 
@@ -173,7 +243,6 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
 export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false, rotation=0, scalePct=100) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
-  // 1. Handle User Rotation (Intermediate Step)
   let srcImage = image;
   if (rotation !== 0) {
      const rotCanvas = document.createElement('canvas');
@@ -191,11 +260,7 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
      srcImage = rotCanvas;
   }
 
-  // 2. Draw image scaled
-  // Calculate base ratio to fit image
   let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
-  
-  // Apply user scale percentage
   ratio *= (scalePct / 100);
 
   const dw = srcImage.width * ratio;
@@ -204,12 +269,9 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
-  // Draw image centered
-  // Since dw/dh might be larger than heightPx/widthPx (if zoomed), this will simply crop the overflow.
   ctx.drawImage(srcImage, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
 
-  // 3. Processing (Dither/Threshold/Invert)
   const w = canvas.width;
   const h = canvas.height;
   const imgData = ctx.getImageData(0, 0, w, h);
