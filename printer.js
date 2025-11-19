@@ -137,11 +137,16 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
 function drawFrame(ctx, width, height, style, invert) {
   if (!style || style === 'none') return;
   
-  const margin = 8; 
-  const x = margin;
-  const y = margin;
-  const w = width - (margin * 2);
-  const h = height - (margin * 2);
+  // Adjusted Margins
+  // marginX (Ends of label): Doubled to 16px (~2mm) to handle feed inaccuracies
+  const marginX = 16; 
+  // marginY (Sides of label): Kept at 8px (~1mm)
+  const marginY = 8;  
+
+  const x = marginX;
+  const y = marginY;
+  const w = width - (marginX * 2);
+  const h = height - (marginY * 2);
   
   ctx.save();
   ctx.strokeStyle = invert ? "#FFFFFF" : "#000000";
@@ -165,26 +170,16 @@ function drawFrame(ctx, width, height, style, invert) {
     ctx.setLineDash([15, 10]); 
     ctx.strokeRect(x, y, w, h);
   } else if (style === 'ticket') {
-    // Corrected Ticket Path
     const r = 15; 
     ctx.beginPath();
-    // Top Left
     ctx.moveTo(x, y);
-    // Top Edge
     ctx.lineTo(x + w, y);
-    // Right Side (Top half)
     ctx.lineTo(x + w, y + h/2 - r);
-    // Right Notch (Inward Arc)
     ctx.arc(x + w, y + h/2, r, 1.5 * Math.PI, 0.5 * Math.PI, true);
-    // Right Side (Bottom half)
     ctx.lineTo(x + w, y + h);
-    // Bottom Edge
     ctx.lineTo(x, y + h);
-    // Left Side (Bottom half)
     ctx.lineTo(x, y + h/2 + r);
-    // Left Notch (Inward Arc)
     ctx.arc(x, y + h/2, r, 0.5 * Math.PI, 1.5 * Math.PI, true);
-    // Close to Top Left
     ctx.closePath();
     ctx.stroke();
   } else if (style === 'cut_corners' || style === 'cut_corners_double') {
@@ -197,13 +192,13 @@ function drawFrame(ctx, width, height, style, invert) {
          ctx.beginPath();
          ctx.moveTo(ix + r, iy);
          ctx.lineTo(ix + iw - r, iy);
-         ctx.arc(ix + iw, iy, r, Math.PI, 0.5*Math.PI, true); // Top Right
+         ctx.arc(ix + iw, iy, r, Math.PI, 0.5*Math.PI, true); 
          ctx.lineTo(ix + iw, iy + ih - r);
-         ctx.arc(ix + iw, iy + ih, r, 1.5*Math.PI, Math.PI, true); // Bot Right
+         ctx.arc(ix + iw, iy + ih, r, 1.5*Math.PI, Math.PI, true); 
          ctx.lineTo(ix + r, iy + ih);
-         ctx.arc(ix, iy + ih, r, 0, 1.5*Math.PI, true); // Bot Left
+         ctx.arc(ix, iy + ih, r, 0, 1.5*Math.PI, true); 
          ctx.lineTo(ix, iy + r);
-         ctx.arc(ix, iy, r, 0.5*Math.PI, 0, true); // Top Left
+         ctx.arc(ix, iy, r, 0.5*Math.PI, 0, true); 
          ctx.closePath();
          ctx.stroke();
       };
@@ -212,9 +207,9 @@ function drawFrame(ctx, width, height, style, invert) {
          ctx.lineWidth = 4;
          drawPath(0);
       } else {
-         ctx.lineWidth = 6; // Outer thick
+         ctx.lineWidth = 6; 
          drawPath(0);
-         ctx.lineWidth = 2; // Inner thin
+         ctx.lineWidth = 2; 
          drawPath(6); 
       }
   } else if (style === 'brackets') {
@@ -260,7 +255,9 @@ export function renderTextCanvas(text, fontSize=40, alignment='center', invert=f
     x = heightPx / 2; 
   }
 
-  const startY = (widthPx - totalBlockHeight) / 2;
+  // Y-Position: Stacked across width.
+  // Added +2 pixels offset for optical correction.
+  const startY = (widthPx - totalBlockHeight) / 2 + 2;
 
   lines.forEach((line, i) => {
     const y = startY + (i * lineHeight) + (lineHeight / 2);
