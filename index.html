@@ -19,9 +19,13 @@
     .card { background:#fff; padding:1rem; border-radius:10px; border:1px solid #f0f4f8; box-shadow:0 6px 18px rgba(0,0,0,0.04); }
     #previewCanvasWrap { display:flex; align-items:center; justify-content:center; width:100%; min-height: 120px; }
     .preview-canvas { display:block; width:auto; height:auto; border-radius:4px; border:1px solid #E6E9EE; background:white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .tabs { display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap; }
-    .tab { padding:0.5rem 0.8rem; border-radius:999px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.03); cursor:pointer; }
-    .tab.active { background:#eef2ff; color:#2563eb; }
+    
+    /* Updated Tab Styles - Squarer look */
+    .tab-row { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; flex-wrap: wrap; gap: 12px; }
+    .tabs { display:flex; gap:0.5rem; flex-wrap:wrap; }
+    .tab { padding:0.5rem 1rem; border-radius:6px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.05); cursor:pointer; border: 1px solid #e2e8f0; font-weight: 500; color: #64748b; }
+    .tab.active { background:#eef2ff; color:#2563eb; border-color: #bfdbfe; }
+    
     .fab { position:fixed; right:20px; bottom:24px; width:64px; height:64px; border-radius:999px; background:#10b981; color:white; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(16,185,129,0.18); z-index: 50; }
     
     /* Input Styles */
@@ -73,14 +77,22 @@
       <div id="previewHint" class="small" style="margin-top:8px; text-align:center; opacity:0.7;">Preview shown in label proportions.</div>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs" id="tabBar">
-      <div class="tab active" data-tab="tab-text">Text</div>
-      <div class="tab" data-tab="tab-image">Image</div>
-      <div class="tab" data-tab="tab-barcode">Barcode</div>
-      <div class="tab" data-tab="tab-qr">QR</div>
-      <div class="tab" data-tab="tab-settings">Settings</div>
-      <div class="tab" data-tab="tab-logs">Logs</div>
+    <!-- Tabs & Global Copies Row -->
+    <div class="tab-row">
+      <div class="tabs" id="tabBar">
+        <div class="tab active" data-tab="tab-text">Text</div>
+        <div class="tab" data-tab="tab-image">Image</div>
+        <div class="tab" data-tab="tab-barcode">Barcode</div>
+        <div class="tab" data-tab="tab-qr">QR</div>
+        <div class="tab" data-tab="tab-settings">Settings</div>
+        <div class="tab" data-tab="tab-logs">Logs</div>
+      </div>
+      
+      <!-- Global Copies Input (Square design to match tabs) -->
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label for="copiesInput" class="small" style="margin:0;">Copies</label>
+        <input id="copiesInput" type="number" value="1" min="1" style="width:70px; text-align:center; padding:0.5rem; border-radius:6px;" />
+      </div>
     </div>
 
     <!-- Tab contents -->
@@ -92,7 +104,7 @@
         <textarea id="textInput" placeholder="Enter text here...">Hello D30C</textarea>
         
         <div class="control-group">
-          <!-- Left Block: Font -->
+          <!-- Left Block: Font Controls -->
           <div class="control-block">
             <label for="fontSize" class="small">Font size</label>
             <div class="row">
@@ -106,31 +118,36 @@
                 <option value="48">Huge (48)</option>
               </select>
             </div>
-            <div class="row" style="margin-top:8px;">
-               <label class="row" style="cursor:pointer; user-select:none;"><input type="checkbox" id="fontBold" /> <span style="font-size:0.9rem">Bold</span></label>
+            
+            <!-- Font Family (Moved from Settings) -->
+            <div style="margin-top:12px;">
+               <label for="fontFamily" class="small">Font Family</label>
+               <select id="fontFamily" style="width:100%;">
+                 <option value="Inter, sans-serif">Inter (Default)</option>
+                 <option value="sans-serif">System Sans</option>
+                 <option value="serif">Serif</option>
+                 <option value="monospace">Monospace</option>
+                 <option value="Roboto, sans-serif">Roboto</option>
+                 <option disabled>---</option>
+                 <option value="custom_load">📂 Load custom font...</option>
+               </select>
+               <!-- Hidden file input for custom font -->
+               <input type="file" id="customFontFile" accept=".ttf,.otf,.woff,.woff2" style="display:none;" />
             </div>
           </div>
 
-          <!-- Right Block: Alignment, Copies, Invert -->
+          <!-- Right Block: Alignment, Options -->
           <div class="control-block">
-            <div class="control-row">
-              <div style="flex:1.5;">
-                <label for="alignment" class="small">Alignment</label>
-                <select id="alignment">
-                  <option value="center">Center</option>
-                  <option value="left">Left</option>
-                  <option value="right">Right</option>
-                </select>
-              </div>
-              <div>
-                <label for="copiesInput" class="small">Copies</label>
-                <input id="copiesInput" type="number" value="1" />
-              </div>
-              <div style="flex:0.8; display:flex; justify-content:center; padding-bottom:10px;">
-                <label class="row" style="cursor:pointer; user-select:none; white-space:nowrap;" title="Invert colors">
-                  <input id="invertInput" type="checkbox" /> <span>Invert</span>
-                </label>
-              </div>
+            <label for="alignment" class="small">Alignment</label>
+            <select id="alignment">
+              <option value="center">Center</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+
+            <div style="display:flex; gap:16px; margin-top:16px;">
+                <label class="row" style="cursor:pointer; user-select:none;"><input type="checkbox" id="fontBold" /> <span style="font-size:0.9rem">Bold</span></label>
+                <label class="row" style="cursor:pointer; user-select:none;"><input id="invertInput" type="checkbox" /> <span style="font-size:0.9rem">Invert</span></label>
             </div>
           </div>
         </div>
@@ -147,13 +164,10 @@
           <div class="control-block" style="flex: 1 1 100%;">
             <label for="imageThreshold" class="small">Threshold & Options</label>
             <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-               <!-- Slider takes available space -->
                <input id="imageThreshold" type="range" min="0" max="255" value="128" style="flex:1; min-width:120px;" />
-               
-               <!-- Options grouped together -->
                <div style="display:flex; gap:12px;">
                  <label class="row" style="cursor:pointer; user-select:none; white-space:nowrap;">
-                   <input id="imageDither" type="checkbox" /> <span style="font-size:0.9rem">Dither(For photos)</span>
+                   <input id="imageDither" type="checkbox" /> <span style="font-size:0.9rem">Dither</span>
                  </label>
                  <label class="row" style="cursor:pointer; user-select:none; white-space:nowrap;">
                    <input id="imageInvert" type="checkbox" /> <span style="font-size:0.9rem">Invert</span>
@@ -172,8 +186,6 @@
           </div>
 
         </div>
-        
-        <!-- Hidden canvas for processing -->
         <div id="imagePreview" style="display:none;"></div>
       </div>
 
@@ -181,7 +193,6 @@
       <div id="tab-barcode" class="tab-content" style="display:none;">
         <label for="barcodeInput" class="small">Barcode content</label>
         <input id="barcodeInput" value="123456789012" />
-        
         <div class="control-group">
           <div class="control-block" style="flex:2;">
              <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
@@ -209,7 +220,6 @@
       <div id="tab-qr" class="tab-content" style="display:none;">
         <label for="qrInput" class="small">QR content</label>
         <input id="qrInput" value="https://example.com" />
-        
         <div class="control-group">
           <div class="control-block">
             <div class="control-row">
@@ -224,7 +234,7 @@
                </div>
                <div style="flex:1;">
                  <label for="qrSize" class="small">Size (px)</label>
-                 <input id="qrSize" type="number" value="256" min="64" max="800" />
+                 <input id="qrSize" type="number" value="70" min="32" max="800" />
                </div>
             </div>
           </div>
@@ -233,7 +243,6 @@
 
       <!-- SETTINGS TAB -->
       <div id="tab-settings" class="tab-content" style="display:none;">
-        
         <!-- Saved Presets Section -->
         <div style="margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #eef2f7;">
            <h4 class="small" style="font-weight:600; margin-bottom:8px;">Saved Presets</h4>
@@ -247,10 +256,8 @@
         </div>
 
         <h4 class="small" style="margin-bottom:12px; font-weight:600;">Printer & Label Configuration</h4>
-        
         <!-- Vertical Group Layout for Settings -->
         <div style="display:flex; flex-direction:column; gap:16px;">
-          
           <!-- Row 1: Dimensions -->
           <div style="width:100%;">
              <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
@@ -268,19 +275,8 @@
                </div>
              </div>
           </div>
-
-          <!-- Row 2: Font & Protocol -->
+          <!-- Row 2: Protocol -->
           <div style="display:flex; flex-wrap:wrap; gap:16px; width:100%;">
-            <div style="flex:1 1 280px;">
-              <label for="fontFamily" class="small">Font family</label>
-              <select id="fontFamily">
-                <option value="Inter, sans-serif">Inter (default)</option>
-                <option value="sans-serif">System Sans</option>
-                <option value="serif">Serif</option>
-                <option value="monospace">Monospace</option>
-                <option value="Roboto, sans-serif">Roboto</option>
-              </select>
-            </div>
             <div style="flex:1 1 280px;">
               <label for="protocolSelect" class="small">Protocol</label>
               <select id="protocolSelect">
@@ -291,7 +287,6 @@
               </select>
             </div>
           </div>
-          
         </div>
 
         <!-- Support Button -->
@@ -316,7 +311,6 @@
   </button>
 
   <script>
-    // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
       .then(reg => {
