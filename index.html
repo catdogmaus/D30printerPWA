@@ -28,6 +28,7 @@
       margin: 0;
       font-family: Inter, system-ui, -apple-system, sans-serif;
       color: var(--text-main);
+      /* Liquid Gradient Background */
       background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 25%, #eef2ff 50%, #fdf4ff 75%, #f0f9ff 100%);
       background-attachment: fixed;
       min-height: 100vh;
@@ -49,7 +50,7 @@
 
     .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-    /* Glass Card */
+    /* Glass Card - Darkened for Contrast */
     .card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
@@ -315,6 +316,8 @@
                     <option value="double">Double</option>
                     <option value="dashed">Dashed</option>
                     <option value="ticket">Ticket</option>
+                    <option value="cut_corners">Concave</option>
+                    <option value="cut_corners_double">Concave Double</option>
                     <option value="brackets">Brackets</option>
                   </select>
                </div>
