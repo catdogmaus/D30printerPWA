@@ -14,7 +14,6 @@
   <style>
     /* Liquid Glass Theme Variables */
     :root {
-      /* FIXED SYNTAX ERROR HERE */
       --glass-bg: rgba(240, 244, 248, 0.75);
       --glass-border: rgba(255, 255, 255, 0.8);
       --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
@@ -29,7 +28,6 @@
       margin: 0;
       font-family: Inter, system-ui, -apple-system, sans-serif;
       color: var(--text-main);
-      /* Liquid Gradient Background */
       background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 25%, #eef2ff 50%, #fdf4ff 75%, #f0f9ff 100%);
       background-attachment: fixed;
       min-height: 100vh;
@@ -77,7 +75,7 @@
     .tab-row { 
       display: flex; 
       justify-content: space-between; 
-      align-items: center; /* Keeps vertical center */
+      align-items: center; 
       margin-top: 1rem; 
       flex-wrap: wrap; 
       gap: 12px; 
@@ -87,7 +85,6 @@
 
     /* Glass Tabs */
     .tab {
-      /* Exact padding matching the copies wrapper below */
       padding: 0.6rem 1.2rem;
       line-height: 1.5;
       border-radius: 6px;
@@ -185,13 +182,12 @@
     }
     button.btn:active { transform: translateY(1px); }
     
-    /* Copies Input Wrapper - Alignment Fixed */
+    /* Copies Input Wrapper */
     .copies-wrapper {
         display: flex;
         align-items: center;
         gap: 10px;
         background: rgba(255, 255, 255, 0.6);
-        /* Exact same padding and line-height as .tab to match height */
         padding: 0.6rem 1rem;
         line-height: 1.5;
         border-radius: 6px;
@@ -298,12 +294,31 @@
 
           <!-- Right Block: Alignment, Options -->
           <div class="control-block">
-            <label for="alignment" class="small">Alignment</label>
-            <select id="alignment">
-              <option value="center">Center</option>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-            </select>
+            
+            <!-- Row: Alignment and Frame -->
+            <div class="control-row">
+               <div style="flex:1;">
+                  <label for="alignment" class="small">Alignment</label>
+                  <select id="alignment">
+                    <option value="center">Center</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+               </div>
+               <div style="flex:1;">
+                  <label for="frameStyle" class="small">Frame</label>
+                  <select id="frameStyle">
+                    <option value="none">None</option>
+                    <option value="simple">Box</option>
+                    <option value="rounded">Rounded</option>
+                    <option value="thick">Thick</option>
+                    <option value="double">Double</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="ticket">Ticket</option>
+                    <option value="brackets">Brackets</option>
+                  </select>
+               </div>
+            </div>
 
             <div style="display:flex; gap:16px; margin-top:16px;">
                 <label class="row" style="cursor:pointer; user-select:none;"><input type="checkbox" id="fontBold" /> <span style="font-size:0.9rem">Bold</span></label>
