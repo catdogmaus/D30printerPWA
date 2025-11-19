@@ -1,4 +1,4 @@
-const CACHE_NAME = 'd30-pwa-v4'; // Incremented version
+const CACHE_NAME = 'd30-pwa-v6'; // Incremented version
 const ASSETS = [
   './',
   './index.html',
@@ -11,17 +11,15 @@ const ASSETS = [
   './icons/icon-monochrome.png',
   './libs/JsBarcode.all.min.js',
   './libs/qrcode.min.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap'
 ];
 
 self.addEventListener('install', (e) => {
-  // Force the waiting service worker to become the active service worker.
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
 });
 
 self.addEventListener('activate', (e) => {
-  // Tell the active service worker to take control of the page immediately.
   e.waitUntil(
     Promise.all([
       self.clients.claim(),
