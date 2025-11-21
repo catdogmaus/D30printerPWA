@@ -3,14 +3,48 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>D30 Printer PWA</title>
+  
+  <!-- Primary SEO -->
+  <title>D30 Printer PWA - Web Bluetooth Label Maker</title>
+  <meta name="description" content="Free open-source web app for Phomemo D30 & D30C thermal printers. Print labels, barcodes, QR codes, and images directly from your browser via Bluetooth. Offline capable." />
+  <meta name="keywords" content="Phomemo D30, Phomemo D30C, Thermal Printer, Web Bluetooth, Label Printer, PWA, Barcode Generator, QR Code, Bluetooth Printer App, Linux Label Printer, Mac Label Printer" />
+  <meta name="author" content="Catdogmaus" />
+  <meta name="robots" content="index, follow" />
+  
+  <!-- PWA Configuration -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#f0f4f8" />
+  <link rel="canonical" href="https://catdogmaus.github.io/D30printerPWA/" />
+
+  <!-- Open Graph / Facebook / Discord -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://catdogmaus.github.io/D30printerPWA/" />
+  <meta property="og:title" content="D30 Printer PWA" />
+  <meta property="og:description" content="Print custom labels, barcodes, and images to your Phomemo D30/D30C thermal printer directly from your browser. No app install needed." />
+  <meta property="og:image" content="https://catdogmaus.github.io/D30printerPWA/icons/icon-256.png" />
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary" />
+  <meta property="twitter:url" content="https://catdogmaus.github.io/D30printerPWA/" />
+  <meta property="twitter:title" content="D30 Printer PWA" />
+  <meta property="twitter:description" content="Web-based controller for Phomemo D30 thermal printers. Print via Bluetooth." />
+  <meta property="twitter:image" content="https://catdogmaus.github.io/D30printerPWA/icons/icon-256.png" />
+
+  <!-- iOS / Mobile Optimization -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="D30 Printer" />
+  <link rel="apple-touch-icon" href="icons/icon-maskable.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-256.png" />
+
+  <!-- Styles & Fonts -->
   <link href="styles/tailwind.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  
   <!-- Local Libraries for Offline Support -->
   <script src="libs/JsBarcode.all.min.js"></script>
   <script src="libs/qrcode.min.js"></script>
+  
   <style>
     /* Liquid Glass Theme Variables */
     :root {
@@ -259,7 +293,6 @@
       <!-- TEXT TAB -->
       <div id="tab-text" class="tab-content">
         <label for="textInput" class="small">Text (Multi-line supported)</label>
-        <!-- Fixed: Removed inner text, added placeholder -->
         <textarea id="textInput" placeholder="Hello D30C"></textarea>
         
         <div class="control-group">
