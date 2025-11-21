@@ -22,6 +22,51 @@ let previewTimer=null;
 const DEBOUNCE=160;
 let imageRotation = 0;
 
+// --- Install Modal Logic ---
+function checkInstallState() {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  const hiddenByUser = loadSetting('hideInstallHelp', false);
+  
+  const btn = $('installHelpBtn');
+  if (!isStandalone) {
+    // Show help button if not installed
+    if (btn) btn.style.display = 'block';
+    
+    // Auto-open modal if not hidden by user (optional, maybe too intrusive? disabled for now)
+    // if (!hiddenByUser) $('installModal').style.display = 'flex';
+  } else {
+    if (btn) btn.style.display = 'none';
+  }
+}
+
+function setupModal() {
+  const modal = $('installModal');
+  const btn = $('installHelpBtn');
+  const closeX = $('closeModalBtn');
+  const closeAct = $('closeModalAction');
+  const dontShow = $('dontShowAgain');
+
+  const open = () => modal.style.display = 'flex';
+  const close = () => {
+    if (dontShow.checked) {
+      saveSetting('hideInstallHelp', true);
+      // Optionally hide the ? button immediately if they say don't show again
+      // btn.style.display = 'none'; 
+    }
+    modal.style.display = 'none';
+  };
+
+  if(btn) btn.onclick = open;
+  if(closeX) closeX.onclick = close;
+  if(closeAct) closeAct.onclick = close;
+  
+  // Close on click outside
+  window.onclick = (e) => {
+    if (e.target === modal) close();
+  };
+}
+// ---------------------------
+
 // --- Custom Font Logic ---
 async function handleCustomFont(ev) {
   const file = ev.target.files[0];
@@ -173,7 +218,6 @@ async function updatePreview(){
   try{
     let obj = null;
     if(shown === 'tab-text'){
-      // Use text value, OR placeholder, OR empty string
       const text = $('textInput').value || $('textInput').placeholder || '';
       const fontSize = Number($('fontSize').value || 36);
       const align = $('alignment').value || 'center';
@@ -240,7 +284,7 @@ function setup(){
         const name = printer.device.name;
         $('headerTitle').textContent = name + ' Printer';
         $('headerSubtitle').textContent = name + ' — Web PWA';
-        // NOTE: We do NOT force text value here anymore to respect placeholder behavior
+        // We do NOT reset text here anymore
         updatePreviewDebounced();
       }
     } else {
@@ -260,7 +304,8 @@ function setup(){
   });
   ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
   
-  // New key 'textInput_v2' forces reset of old data
+  // Reset text logic: If 'textInput_v2' is null (first load of this version), we leave it empty
+  // to let placeholder show. We do NOT load the old 'textInput' key.
   $('textInput').addEventListener('input', ()=>{ saveSetting('textInput_v2', $('textInput').value); updatePreviewDebounced(); });
   const savedText = loadSetting('textInput_v2', null); 
   if(savedText !== null) $('textInput').value = savedText;
@@ -346,6 +391,10 @@ function setup(){
   $('deletePresetBtn').addEventListener('click', deletePreset);
   $('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
   
+  // Install Help Wiring
+  setupModal();
+  checkInstallState();
+
   updatePreviewDebounced();
 }
 
