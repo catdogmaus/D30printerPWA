@@ -173,7 +173,7 @@ async function updatePreview(){
   try{
     let obj = null;
     if(shown === 'tab-text'){
-      const text = $('textInput').value || '';
+      const text = $('textInput').value || $('textInput').placeholder || '';
       const fontSize = Number($('fontSize').value || 36);
       const align = $('alignment').value || 'center';
       const invert = $('invertInput').checked;
@@ -181,7 +181,6 @@ async function updatePreview(){
       const frame = $('frameStyle').value;
       const ff = $('fontFamily') ? $('fontFamily').value : printer.settings.fontFamily;
       const fontFamily = bold ? ff + ' bold' : ff;
-      // Pass frameStyle here
       obj = renderTextCanvas(text, fontSize, align, invert, labelW, labelH, dpi, fontFamily, frame);
     } else if (shown === 'tab-image') {
       const cdata = $('imagePreview') && $('imagePreview').dataset && $('imagePreview').dataset.canvas;
@@ -240,8 +239,8 @@ function setup(){
         const name = printer.device.name;
         $('headerTitle').textContent = name + ' Printer';
         $('headerSubtitle').textContent = name + ' — Web PWA';
-        $('textInput').value = 'Hello ' + name;
-        saveSetting('textInput', $('textInput').value);
+        $('textInput').value = ''; // Clear text input on connect so placeholder shows
+        saveSetting('textInput', ''); 
         updatePreviewDebounced();
       }
     } else {
@@ -319,7 +318,9 @@ function setup(){
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value||1);
       if(shown === 'tab-text'){
-        const obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily, $('frameStyle').value);
+        // Fallback to placeholder if empty
+        const textToPrint = $('textInput').value || $('textInput').placeholder;
+        const obj = renderTextCanvas(textToPrint, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily, $('frameStyle').value);
         await printCanvasObject(obj, copies, $('invertInput').checked);
       } else if (shown === 'tab-image'){
         const dataURL = $('imagePreview')?.dataset?.canvas; if(!dataURL) return alert('Please upload an image');
