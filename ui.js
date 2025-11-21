@@ -233,7 +233,24 @@ function setup(){
   document.querySelectorAll('#tabBar .tab').forEach(t=> t.addEventListener('click', ()=> setActiveTab(t.dataset.tab)));
   const lastTab = loadSetting('ui.selectedTab', 'tab-text'); setActiveTab(lastTab);
   
-  $('connectBtn').addEventListener('click', async ()=> { if(!printer.connected) await connect(); else await disconnect(); updatePreviewDebounced(); });
+  $('connectBtn').addEventListener('click', async ()=> { 
+    if(!printer.connected) {
+      await connect(); 
+      if(printer.connected && printer.device && printer.device.name) {
+        const name = printer.device.name;
+        $('headerTitle').textContent = name + ' Printer';
+        $('headerSubtitle').textContent = name + ' — Web PWA';
+        $('textInput').value = 'Hello ' + name;
+        saveSetting('textInput', $('textInput').value);
+        updatePreviewDebounced();
+      }
+    } else {
+      await disconnect(); 
+      $('headerTitle').textContent = 'D30 Printer';
+      $('headerSubtitle').textContent = 'Phomemo D30C — Web PWA';
+    }
+    updatePreviewDebounced(); 
+  });
 
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput','frameStyle'].forEach(k=>{
      if (k === 'qrSize' && !localStorage.getItem('qrSize')) {
@@ -302,7 +319,6 @@ function setup(){
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value||1);
       if(shown === 'tab-text'){
-        // Pass frameStyle here
         const obj = renderTextCanvas($('textInput').value, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily, $('frameStyle').value);
         await printCanvasObject(obj, copies, $('invertInput').checked);
       } else if (shown === 'tab-image'){
