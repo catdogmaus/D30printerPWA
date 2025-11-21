@@ -1,4 +1,4 @@
-const CACHE_NAME = 'd30-pwa-v9'; // Incremented version
+const CACHE_NAME = 'd30-pwa-v10'; // Incremented version
 const ASSETS = [
   './',
   './index.html',
