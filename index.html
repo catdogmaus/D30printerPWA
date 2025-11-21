@@ -50,7 +50,7 @@
 
     .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-    /* Glass Card */
+    /* Glass Card - Darkened for Contrast */
     .card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
@@ -208,7 +208,6 @@
       <div style="display:flex; gap:12px; align-items:center;">
         <img src="icons/icon-256.png" alt="logo" style="width:44px;height:44px;border-radius:12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div>
-          <!-- Added IDs here -->
           <div id="headerTitle" style="font-weight:600; font-size:18px; letter-spacing:-0.02em;">D30 Printer</div>
           <div id="headerSubtitle" class="small" style="margin:0;">Phomemo D30C — Web PWA</div>
         </div>
@@ -260,7 +259,8 @@
       <!-- TEXT TAB -->
       <div id="tab-text" class="tab-content">
         <label for="textInput" class="small">Text (Multi-line supported)</label>
-        <textarea id="textInput" placeholder="Enter text here...">Hello D30C</textarea>
+        <!-- Fixed: Removed inner text, added placeholder -->
+        <textarea id="textInput" placeholder="Hello D30C"></textarea>
         
         <div class="control-group">
           <!-- Left Block: Font Controls -->
