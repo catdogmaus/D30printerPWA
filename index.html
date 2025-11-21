@@ -232,6 +232,21 @@
     .control-block { flex: 1 1 280px; }
     .control-row { display: flex; gap: 12px; align-items: flex-end; }
     .control-row > div { flex: 1; }
+
+    /* Help Modal */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.3); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal-content {
+      background: #ffffff; width: 90%; max-width: 500px;
+      padding: 24px; border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      animation: fadeUp 0.3s ease;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    .code-box { background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #334155; }
   </style>
 </head>
 <body>
@@ -241,7 +256,11 @@
         <img src="icons/icon-256.png" alt="logo" style="width:44px;height:44px;border-radius:12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div>
           <div id="headerTitle" style="font-weight:600; font-size:18px; letter-spacing:-0.02em;">D30 Printer</div>
-          <div id="headerSubtitle" class="small" style="margin:0;">Phomemo D30C — Web PWA</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div id="headerSubtitle" class="small" style="margin:0;">Phomemo D30C — Web PWA</div>
+            <!-- Help Button -->
+            <button id="installHelpBtn" style="background:rgba(59,130,246,0.1); color:#3b82f6; border:none; border-radius:50%; width:20px; height:20px; font-size:12px; font-weight:bold; cursor:pointer; display:none;">?</button>
+          </div>
         </div>
       </div>
       <div style="display:flex; gap:12px; align-items:center;">
@@ -515,6 +534,39 @@
       </div>
     </section>
   </main>
+
+  <!-- Help Modal -->
+  <div id="installModal" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h2 style="margin:0; font-size:1.2rem; font-weight:600;">How to Install</h2>
+        <button id="closeModalBtn" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#64748b;">&times;</button>
+      </div>
+      
+      <div style="font-size:0.95rem; line-height:1.5; color:#334155;">
+        <p>This app works best when installed on your device. It allows offline use and full-screen experience.</p>
+        
+        <h3 style="font-size:1rem; font-weight:600; margin:16px 0 8px;">Browser Requirements</h3>
+        <ul style="list-style:disc; padding-left:20px; margin-bottom:12px;">
+          <li><strong>Chromium-based</strong> browser required (Chrome, Edge, Brave, etc.).</li>
+          <li><strong>Brave Users:</strong> Enable Bluetooth by visiting <span class="code-box">brave://flags</span> and searching for "Web Bluetooth".</li>
+        </ul>
+
+        <h3 style="font-size:1rem; font-weight:600; margin:16px 0 8px;">Android / Desktop</h3>
+        <p>Tap <strong>Add to Home Screen</strong> in your browser menu, or click the Install icon in the URL bar.</p>
+
+        <h3 style="font-size:1rem; font-weight:600; margin:16px 0 8px;">iOS (iPhone/iPad)</h3>
+        <p>Open in <strong>Safari</strong>, tap the <strong>Share</strong> icon, scroll down and select <strong>Add to Home Screen</strong>.</p>
+      </div>
+
+      <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">
+          <input type="checkbox" id="dontShowAgain" /> Don't show again
+        </label>
+        <button id="closeModalAction" class="btn">Got it</button>
+      </div>
+    </div>
+  </div>
 
   <button id="fab-print" class="fab" title="Print" aria-label="Print">
     <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 9V3h12v6h2v8h-4v4H8v-4H4V9h2zm2 10h8v-4H8v4zM18 5H6v4h12V5z"/></svg>
