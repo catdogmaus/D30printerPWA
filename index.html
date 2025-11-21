@@ -11,36 +11,34 @@
   <meta name="author" content="Catdogmaus" />
   <meta name="robots" content="index, follow" />
   
-  <!-- PWA Configuration -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#f0f4f8" />
   <link rel="canonical" href="https://catdogmaus.github.io/D30printerPWA/" />
 
-  <!-- Open Graph / Facebook / Discord -->
+  <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://catdogmaus.github.io/D30printerPWA/" />
   <meta property="og:title" content="D30 Printer PWA" />
-  <meta property="og:description" content="Print custom labels, barcodes, and images to your Phomemo D30/D30C thermal printer directly from your browser. No app install needed." />
+  <meta property="og:description" content="Print custom labels, barcodes, and images to your Phomemo D30/D30C thermal printer directly from your browser." />
   <meta property="og:image" content="https://catdogmaus.github.io/D30printerPWA/icons/icon-256.png" />
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary" />
-  <meta property="twitter:url" content="https://catdogmaus.github.io/D30printerPWA/" />
   <meta property="twitter:title" content="D30 Printer PWA" />
-  <meta property="twitter:description" content="Web-based controller for Phomemo D30 thermal printers. Print via Bluetooth." />
+  <meta property="twitter:description" content="Web-based controller for Phomemo D30 thermal printers." />
   <meta property="twitter:image" content="https://catdogmaus.github.io/D30printerPWA/icons/icon-256.png" />
 
-  <!-- iOS / Mobile Optimization -->
+  <!-- Mobile Web App Capabilities -->
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="D30 Printer" />
+  
   <link rel="apple-touch-icon" href="icons/icon-maskable.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-256.png" />
 
-  <!-- Styles & Fonts -->
   <link href="styles/tailwind.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  
   <!-- Local Libraries for Offline Support -->
   <script src="libs/JsBarcode.all.min.js"></script>
   <script src="libs/qrcode.min.js"></script>
@@ -84,7 +82,7 @@
 
     .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-    /* Glass Card - Darkened for Contrast */
+    /* Glass Card */
     .card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
