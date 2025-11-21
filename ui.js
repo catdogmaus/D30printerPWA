@@ -173,6 +173,7 @@ async function updatePreview(){
   try{
     let obj = null;
     if(shown === 'tab-text'){
+      // Use text value, OR placeholder, OR empty string
       const text = $('textInput').value || $('textInput').placeholder || '';
       const fontSize = Number($('fontSize').value || 36);
       const align = $('alignment').value || 'center';
@@ -239,8 +240,7 @@ function setup(){
         const name = printer.device.name;
         $('headerTitle').textContent = name + ' Printer';
         $('headerSubtitle').textContent = name + ' — Web PWA';
-        $('textInput').value = ''; // Clear text input on connect so placeholder shows
-        saveSetting('textInput', ''); 
+        // NOTE: We do NOT force text value here anymore to respect placeholder behavior
         updatePreviewDebounced();
       }
     } else {
@@ -260,8 +260,10 @@ function setup(){
   });
   ['invertInput','imageInvert','imageDither','fontBold'].forEach(k=> wireSimple(k,k, v=>v));
   
-  $('textInput').addEventListener('input', ()=>{ saveSetting('textInput', $('textInput').value); updatePreviewDebounced(); });
-  const savedText = loadSetting('textInput', null); if(savedText !== null) $('textInput').value = savedText;
+  // New key 'textInput_v2' forces reset of old data
+  $('textInput').addEventListener('input', ()=>{ saveSetting('textInput_v2', $('textInput').value); updatePreviewDebounced(); });
+  const savedText = loadSetting('textInput_v2', null); 
+  if(savedText !== null) $('textInput').value = savedText;
 
   $('fontInc').addEventListener('click', ()=> { $('fontSize').value = Number($('fontSize').value||36)+2; saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
   $('fontDec').addEventListener('click', ()=> { $('fontSize').value = Math.max(6, Number($('fontSize').value||36)-2); saveSetting('fontSize', Number($('fontSize').value)); updatePreviewDebounced(); });
@@ -318,7 +320,6 @@ function setup(){
       const dpi = printer.settings.dpiPerMM || 8;
       const copies = Number($('copiesInput').value||1);
       if(shown === 'tab-text'){
-        // Fallback to placeholder if empty
         const textToPrint = $('textInput').value || $('textInput').placeholder;
         const obj = renderTextCanvas(textToPrint, Number($('fontSize').value||36), $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily')?.value||printer.settings.fontFamily, $('frameStyle').value);
         await printCanvasObject(obj, copies, $('invertInput').checked);
