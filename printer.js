@@ -314,7 +314,6 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
-  // Margins
   const mx = 16; 
   const visW = heightPx - (2*mx); 
   const visH = widthPx; 
@@ -338,11 +337,9 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   const getRect = (pos) => {
     if (pos === 'left') return { x: lx, y: 0, w: lw, h: visH };
     if (pos === 'right') return { x: rx, y: 0, w: rw, h: visH };
-    
     if (pos === 'top')    return { x: sx, y: 0, w: sw, h: visH * 0.25 };
     if (pos === 'bottom') return { x: sx, y: visH * 0.75, w: sw, h: visH * 0.25 };
     
-    // Center fills remaining
     let topUsed = false; let botUsed = false;
     ['text','image','barcode','qr'].forEach(k => {
         if (data[k].enabled) {
@@ -366,19 +363,9 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
 
-    if (data.text.enabled && data.text.pos === pos) {
-       ctx.save();
-       ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
-       ctx.fillStyle = "#000000";
-       ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
-       ctx.textBaseline = "middle"; ctx.textAlign = "center";
-       ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2);
-       ctx.restore();
-    }
-    
+    // 1. DRAW IMAGE FIRST (Background layer)
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
         let img = data.image.img;
-        // Handle rotation via temp canvas if needed
         if (data.image.rotation !== 0) {
              const rotCanvas = document.createElement('canvas');
              if (data.image.rotation % 180 !== 0) { rotCanvas.width = img.height; rotCanvas.height = img.width; } 
@@ -398,12 +385,10 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         const dy = rect.y + (rect.h - dh)/2;
         ctx.drawImage(img, dx, dy, dw, dh);
         
-        // Apply Dither/Threshold to this specific region
         const iData = ctx.getImageData(dx, dy, dw, dh);
         const dd = iData.data;
         
         if (data.image.dither) {
-            // Grayscale
             for (let i=0; i<dd.length; i+=4) {
                 const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
                 dd[i]=dd[i+1]=dd[i+2]=g;
@@ -439,6 +424,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         ctx.putImageData(iData, dx, dy);
     }
     
+    // 2. DRAW BARCODES
     if (data.barcode.enabled && data.barcode.pos === pos) {
         const bcCanvas = document.createElement('canvas');
         try {
@@ -450,6 +436,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         } catch(e) {}
     }
     
+    // 3. DRAW QR/AZTEC
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
         if (data.qr.type === 'AZTEC') {
@@ -466,6 +453,17 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         const dw = qCanvas.width * scale;
         const dh = qCanvas.height * scale;
         ctx.drawImage(qCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
+    }
+
+    // 4. DRAW TEXT LAST (Foreground layer)
+    if (data.text.enabled && data.text.pos === pos) {
+       ctx.save();
+       ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+       ctx.fillStyle = "#000000";
+       ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
+       ctx.textBaseline = "middle"; ctx.textAlign = "center";
+       ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2);
+       ctx.restore();
     }
   }
 
