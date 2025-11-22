@@ -311,6 +311,7 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
+// --- Updated Combined Logic: LAYERED APPROACH ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
@@ -357,13 +358,15 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
-  const drawOrder = ['center', 'left', 'right', 'top', 'bottom'];
+  const positions = ['center', 'left', 'right', 'top', 'bottom'];
   
-  for (const pos of drawOrder) {
+  // PASS 1: DRAW ALL IMAGES FIRST (Background Layer)
+  // This ensures that image processing (dither/threshold) only affects the image itself
+  // and does not mess up text/barcodes drawn later.
+  for (const pos of positions) {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
 
-    // 1. DRAW IMAGE FIRST (Background layer)
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
         let img = data.image.img;
         if (data.image.rotation !== 0) {
@@ -423,8 +426,15 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         }
         ctx.putImageData(iData, dx, dy);
     }
-    
-    // 2. DRAW BARCODES
+  }
+
+  // PASS 2: DRAW CONTENT (Foreground Layer)
+  // Text, Barcodes, and QRs are drawn on top of any images.
+  for (const pos of positions) {
+    const rect = getRect(pos);
+    if (rect.w <= 0 || rect.h <= 0) continue;
+
+    // Barcodes
     if (data.barcode.enabled && data.barcode.pos === pos) {
         const bcCanvas = document.createElement('canvas');
         try {
@@ -436,7 +446,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         } catch(e) {}
     }
     
-    // 3. DRAW QR/AZTEC
+    // QR/Aztec
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
         if (data.qr.type === 'AZTEC') {
@@ -455,7 +465,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         ctx.drawImage(qCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
     }
 
-    // 4. DRAW TEXT LAST (Foreground layer)
+    // Text
     if (data.text.enabled && data.text.pos === pos) {
        ctx.save();
        ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
