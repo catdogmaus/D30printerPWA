@@ -132,7 +132,6 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-// --- Frame Logic (reused) ---
 function drawFrame(ctx, width, height, style, invert) {
   if (!style || style === 'none') return;
   const marginX = 16; const marginY = 8;  
@@ -296,7 +295,6 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   const availableW = heightPx; 
   const availableH = widthPx; 
   
-  // Sizing logic
   const targetSize = size;
   const fitScale = Math.min(availableW / qrCanvas.width, availableH / qrCanvas.height);
   const requestedScale = targetSize / qrCanvas.width;
@@ -313,18 +311,14 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// --- Updated Combined Logic ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
-  // Visually rotated dimensions (40mm x 12mm)
-  // W = heightPx, H = widthPx
-  // Add safety margins (16px Left/Right)
-  const mx = 16;
-  const visW = heightPx - (2*mx); // Usable width
-  const visH = widthPx; // Full height available
+  // Margins
+  const mx = 16; 
+  const visW = heightPx - (2*mx); 
+  const visH = widthPx; 
   
-  // Determine layout zones based on user selection
   const slots = { left: false, right: false };
   ['text','image','barcode','qr'].forEach(k => {
       if (data[k].enabled) {
@@ -333,39 +327,22 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
       }
   });
 
-  // Calculate Zone Boundaries relative to usable area
-  // Start of label (Left) is at mx.
-  
-  // Left Zone: 25% of usable width, full height.
   const lx = mx; 
   const lw = slots.left ? visW * 0.25 : 0;
-  
-  // Right Zone: 25% of usable width, full height.
   const rw = slots.right ? visW * 0.25 : 0;
   const rx = mx + visW - rw;
   
-  // Center Span (Space between Left and Right)
   const sx = lx + lw;
   const sw = visW - lw - rw;
-  
-  // Top/Bottom logic within Center Span
-  // They take 25% of height, full width of center span.
-  // We check if anything is actually in top/bottom to reserve space?
-  // User said: "Left/Right push Top/Bottom". This implies Top/Bottom live in the center span.
   
   const getRect = (pos) => {
     if (pos === 'left') return { x: lx, y: 0, w: lw, h: visH };
     if (pos === 'right') return { x: rx, y: 0, w: rw, h: visH };
     
-    // Center Area items (Top/Bottom/Center)
     if (pos === 'top')    return { x: sx, y: 0, w: sw, h: visH * 0.25 };
     if (pos === 'bottom') return { x: sx, y: visH * 0.75, w: sw, h: visH * 0.25 };
     
-    // Center Position: Fills remaining vertical space between top/bottom
-    // We need to know if top/bottom are occupied to shrink center?
-    // Simplified: Center takes middle 50% height if T/B exist, or full height if not?
-    // User said "Center fills remaining".
-    // Let's check what's enabled in Top/Bottom.
+    // Center fills remaining
     let topUsed = false; let botUsed = false;
     ['text','image','barcode','qr'].forEach(k => {
         if (data[k].enabled) {
@@ -373,12 +350,9 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
             if (data[k].pos === 'bottom') botUsed = true;
         }
     });
-    
     const cy = topUsed ? visH * 0.25 : 0;
     const ch = visH - (topUsed ? visH*0.25 : 0) - (botUsed ? visH*0.25 : 0);
-    
     if (pos === 'center') return { x: sx, y: cy, w: sw, h: ch };
-    
     return { x: 0, y: 0, w: 0, h: 0 };
   };
 
@@ -403,12 +377,66 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     }
     
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
-        const img = data.image.img;
+        let img = data.image.img;
+        // Handle rotation via temp canvas if needed
+        if (data.image.rotation !== 0) {
+             const rotCanvas = document.createElement('canvas');
+             if (data.image.rotation % 180 !== 0) { rotCanvas.width = img.height; rotCanvas.height = img.width; } 
+             else { rotCanvas.width = img.width; rotCanvas.height = img.height; }
+             const rctx = rotCanvas.getContext('2d');
+             rctx.translate(rotCanvas.width/2, rotCanvas.height/2);
+             rctx.rotate(data.image.rotation * Math.PI / 180);
+             rctx.drawImage(img, -img.width/2, -img.height/2);
+             img = rotCanvas;
+        }
+
         let ratio = Math.min(rect.w / img.width, rect.h / img.height);
         ratio *= (data.image.scalePct / 100);
         const dw = img.width * ratio;
         const dh = img.height * ratio;
-        ctx.drawImage(img, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
+        const dx = rect.x + (rect.w - dw)/2;
+        const dy = rect.y + (rect.h - dh)/2;
+        ctx.drawImage(img, dx, dy, dw, dh);
+        
+        // Apply Dither/Threshold to this specific region
+        const iData = ctx.getImageData(dx, dy, dw, dh);
+        const dd = iData.data;
+        
+        if (data.image.dither) {
+            // Grayscale
+            for (let i=0; i<dd.length; i+=4) {
+                const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
+                dd[i]=dd[i+1]=dd[i+2]=g;
+            }
+            const iw = iData.width; const ih = iData.height;
+            for(let y=0; y<ih; y++){
+                for(let x=0; x<iw; x++){
+                    const i = (y*iw + x)*4;
+                    const oldP = dd[i];
+                    const newP = oldP < 128 ? 0 : 255;
+                    dd[i]=dd[i+1]=dd[i+2]=newP;
+                    const err = oldP - newP;
+                    if(x+1<iw) dd[((y*iw+x+1)*4)] += err*7/16;
+                    if(x-1>=0 && y+1<ih) dd[(((y+1)*iw+x-1)*4)] += err*3/16;
+                    if(y+1<ih) dd[(((y+1)*iw+x)*4)] += err*5/16;
+                    if(x+1<iw && y+1<ih) dd[(((y+1)*iw+x+1)*4)] += err*1/16;
+                }
+            }
+        } else {
+            for(let i=0; i<dd.length; i+=4) {
+                const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
+                const v = g < data.image.threshold ? 0 : 255;
+                dd[i]=dd[i+1]=dd[i+2]=v;
+            }
+        }
+        
+        if (data.image.invert) {
+            for(let i=0; i<dd.length; i+=4) {
+                const v = dd[i] === 0 ? 255 : 0;
+                dd[i]=dd[i+1]=dd[i+2]=v;
+            }
+        }
+        ctx.putImageData(iData, dx, dy);
     }
     
     if (data.barcode.enabled && data.barcode.pos === pos) {
@@ -424,11 +452,12 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
-        // Generate standard QR or Aztec based on... wait, Combine tab doesn't select type.
-        // We default to Standard QR unless we add a selector.
-        await QRCode.toCanvas(qCanvas, data.qr.val, { margin: 0 });
+        if (data.qr.type === 'AZTEC') {
+             try { bwipjs.toCanvas(qCanvas, { bcid: 'azteccode', text: data.qr.val, scale: 4, includetext: false }); } catch(e){}
+        } else {
+             await QRCode.toCanvas(qCanvas, data.qr.val, { errorCorrectionLevel: data.qr.type, margin: 0 });
+        }
         
-        // Scale logic: Use requested pixel size as target
         const targetSize = data.qr.size;
         const fitScale = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
         const reqScale = targetSize / qCanvas.width;
@@ -441,7 +470,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   }
 
   ctx.restore();
-  return { canvas, bytesPerRow, widthPx, heightPx };
+  return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
 export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
