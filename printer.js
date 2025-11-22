@@ -320,6 +320,7 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
+// --- Updated Combined Logic ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
@@ -360,8 +361,15 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
             if (data[k].pos === 'bottom') botUsed = true;
         }
     });
+    
     const cy = topUsed ? visH * vSplit : 0;
-    const ch = visH - (topUsed ? visH*vSplit : 0) - (botUsed ? visH*vSplit : 0);
+    // Original Center Height calculation
+    let ch = visH - (topUsed ? visH*vSplit : 0) - (botUsed ? visH*vSplit : 0);
+    
+    // FIX: If Bottom is used, expand center height by 5% downwards
+    // This reduces the visual gap without changing the Bottom element's rect.
+    if (botUsed) ch += visH * 0.05;
+
     if (pos === 'center') return { x: sx, y: cy, w: sw, h: ch };
     return { x: 0, y: 0, w: 0, h: 0 };
   };
@@ -479,7 +487,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
        ctx.fillStyle = "#000000";
        ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
        ctx.textBaseline = "middle"; ctx.textAlign = "center";
-       // Added +2px offset to center text vertically, matching main text tab behavior
+       // Added +2px offset
        ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2 + 2);
        ctx.restore();
     }
