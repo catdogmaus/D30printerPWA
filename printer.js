@@ -218,8 +218,6 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
      rctx.drawImage(image, -image.width/2, -image.height/2);
      srcImage = rotCanvas;
   }
-  
-  // Use temporary canvas to process pixels WITHOUT rotation interference
   let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
   ratio *= (scalePct / 100);
   const dw = Math.floor(srcImage.width * ratio);
@@ -247,7 +245,7 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
         if (x + 1 < dw) d[((y * dw + x + 1) * 4)] += quantError * 7 / 16;
         if (x - 1 >= 0 && y + 1 < dh) d[(( (y + 1) * dw + x - 1) * 4)] += quantError * 3 / 16;
         if (y + 1 < dh) d[(( (y + 1) * dw + x) * 4)] += quantError * 5 / 16;
-        if (x + 1 < dw && y + 1 < dh) d[(((y + 1) * dw + x + 1) * 4)] += err*1/16;
+        if (x + 1 < dw && y + 1 < dh) d[(((y + 1) * dw + x + 1) * 4)] += quantError * 1 / 16;
       }
     }
     if (invert) {
@@ -322,7 +320,6 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// --- Updated Combined Logic: LAYERED APPROACH ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
@@ -346,13 +343,15 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   const sx = lx + lw;
   const sw = visW - lw - rw;
   
+  // Vertical split ratio for Top/Bottom zones (0.15 = 15%)
+  const vSplit = 0.15;
+
   const getRect = (pos) => {
     if (pos === 'left') return { x: lx, y: 0, w: lw, h: visH };
     if (pos === 'right') return { x: rx, y: 0, w: rw, h: visH };
     
-    // Top/Bottom now restricted to 20% height (0.2)
-    if (pos === 'top')    return { x: sx, y: 0, w: sw, h: visH * 0.2 };
-    if (pos === 'bottom') return { x: sx, y: visH * 0.8, w: sw, h: visH * 0.2 };
+    if (pos === 'top')    return { x: sx, y: 0, w: sw, h: visH * vSplit };
+    if (pos === 'bottom') return { x: sx, y: visH * (1 - vSplit), w: sw, h: visH * vSplit };
     
     let topUsed = false; let botUsed = false;
     ['text','image','barcode','qr'].forEach(k => {
@@ -361,10 +360,8 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
             if (data[k].pos === 'bottom') botUsed = true;
         }
     });
-    
-    // Center fills remaining space based on Top/Bottom presence (0.2 each)
-    const cy = topUsed ? visH * 0.2 : 0;
-    const ch = visH - (topUsed ? visH*0.2 : 0) - (botUsed ? visH*0.2 : 0);
+    const cy = topUsed ? visH * vSplit : 0;
+    const ch = visH - (topUsed ? visH*vSplit : 0) - (botUsed ? visH*vSplit : 0);
     if (pos === 'center') return { x: sx, y: cy, w: sw, h: ch };
     return { x: 0, y: 0, w: 0, h: 0 };
   };
@@ -375,7 +372,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   
   const positions = ['center', 'left', 'right', 'top', 'bottom'];
 
-  // LAYER 1: IMAGES (Background)
+  // LAYER 1: IMAGES
   for (const pos of positions) {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
@@ -398,7 +395,6 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         const dw = Math.floor(img.width * ratio);
         const dh = Math.floor(img.height * ratio);
         
-        // Use Temp Canvas to isolate image processing
         const tCv = document.createElement('canvas');
         tCv.width = dw; tCv.height = dh;
         const tCtx = tCv.getContext('2d');
@@ -439,17 +435,15 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         }
         tCtx.putImageData(iData, 0, 0);
         
-        // Draw processed image to main canvas
         ctx.drawImage(tCv, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2);
     }
   }
 
-  // LAYER 2: CONTENT (Foreground)
+  // LAYER 2: CONTENT
   for (const pos of positions) {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
 
-    // Barcodes
     if (data.barcode.enabled && data.barcode.pos === pos) {
         const bcCanvas = document.createElement('canvas');
         try {
@@ -461,7 +455,6 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         } catch(e) {}
     }
     
-    // QR/Aztec
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
         if (data.qr.type === 'AZTEC') {
@@ -480,7 +473,6 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         ctx.drawImage(qCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
     }
 
-    // Text
     if (data.text.enabled && data.text.pos === pos) {
        ctx.save();
        ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
