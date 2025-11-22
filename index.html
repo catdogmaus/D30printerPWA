@@ -92,8 +92,18 @@
     @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
     .code-box { background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #334155; }
     
-    /* Mixer Row Updated */
-    .mixer-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.4); border-radius: 8px; border: 1px solid var(--glass-border); margin-bottom: 8px; }
+    /* Mixer Grid Layout */
+    .mixer-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    @media (min-width: 640px) {
+      .mixer-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .mixer-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.4); border-radius: 8px; border: 1px solid var(--glass-border); }
     .mixer-label { font-weight: 500; flex: 1; display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
     .mixer-input-sm { width: 70px; text-align: center; padding: 0.5rem; font-size: 0.9rem; }
     .mixer-select { width: 110px; padding: 0.5rem; font-size: 0.9rem; }
@@ -299,67 +309,74 @@
         </div>
       </div>
 
-      <!-- COMBINE TAB (New) -->
+      <!-- COMBINE TAB -->
       <div id="tab-combine" class="tab-content" style="display:none;">
         <h4 class="small" style="margin-bottom:12px; font-weight:600;">Layer Mixer</h4>
         <div style="font-size:0.85rem; color:#64748b; margin-bottom:12px;">
-          Configure elements. Center element automatically fills remaining space.
+          Elements priority: Left/Right push Top/Bottom and Center. Center fills remaining space.
         </div>
 
-        <div class="mixer-row">
-          <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixText" checked> <span>Text</span>
-          </label>
-          <input id="mixTextSize" type="number" value="36" class="mixer-input-sm" title="Font Size" />
-          <select id="mixTextPos" class="mixer-select">
-            <option value="center" selected>Center</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-          </select>
-        </div>
+        <div class="mixer-grid">
+          <!-- Text -->
+          <div class="mixer-row">
+            <label class="mixer-label" style="cursor:pointer">
+              <input type="checkbox" id="mixText" checked> <span>Text</span>
+            </label>
+            <input id="mixTextSize" type="number" value="36" class="mixer-input-sm" title="Font Size" />
+            <select id="mixTextPos" class="mixer-select">
+              <option value="center" selected>Center</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+            </select>
+          </div>
 
-        <div class="mixer-row">
-          <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixImage"> <span>Image</span>
-          </label>
-          <input id="mixImageScale" type="number" value="100" class="mixer-input-sm" title="Scale %" />
-          <select id="mixImagePos" class="mixer-select">
-            <option value="center">Center</option>
-            <option value="left" selected>Left</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-          </select>
-        </div>
+          <!-- Image -->
+          <div class="mixer-row">
+            <label class="mixer-label" style="cursor:pointer">
+              <input type="checkbox" id="mixImage"> <span>Image</span>
+            </label>
+            <input id="mixImageScale" type="number" value="100" class="mixer-input-sm" title="Scale %" />
+            <select id="mixImagePos" class="mixer-select">
+              <option value="center">Center</option>
+              <option value="left" selected>Left</option>
+              <option value="right">Right</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+            </select>
+          </div>
 
-        <div class="mixer-row">
-          <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixBarcode"> <span>Barcode</span>
-          </label>
-          <input id="mixBarcodeScale" type="number" value="2" class="mixer-input-sm" title="Scale" />
-          <select id="mixBarcodePos" class="mixer-select">
-            <option value="center">Center</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="bottom" selected>Bottom</option>
-          </select>
-        </div>
+          <!-- Barcode -->
+          <div class="mixer-row">
+            <label class="mixer-label" style="cursor:pointer">
+              <input type="checkbox" id="mixBarcode"> <span>Barcode</span>
+            </label>
+            <!-- Default scale updated to 9 -->
+            <input id="mixBarcodeScale" type="number" value="9" class="mixer-input-sm" title="Scale" />
+            <select id="mixBarcodePos" class="mixer-select">
+              <option value="center">Center</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+              <option value="top">Top</option>
+              <option value="bottom" selected>Bottom</option>
+            </select>
+          </div>
 
-        <div class="mixer-row">
-          <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixQR"> <span>QR/Aztec</span>
-          </label>
-          <input id="mixQRSize" type="number" value="70" class="mixer-input-sm" title="Size px" />
-          <select id="mixQRPos" class="mixer-select">
-            <option value="center">Center</option>
-            <option value="left" selected>Left</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-          </select>
+          <!-- QR -->
+          <div class="mixer-row">
+            <label class="mixer-label" style="cursor:pointer">
+              <input type="checkbox" id="mixQR"> <span>QR/Aztec</span>
+            </label>
+            <input id="mixQRSize" type="number" value="70" class="mixer-input-sm" title="Size px" />
+            <select id="mixQRPos" class="mixer-select">
+              <option value="center">Center</option>
+              <option value="left" selected>Left</option>
+              <option value="right">Right</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+            </select>
+          </div>
         </div>
       </div>
 
