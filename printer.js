@@ -133,88 +133,45 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-// --- Frame Drawing Logic ---
+// --- Frame Logic (reused) ---
 function drawFrame(ctx, width, height, style, invert) {
   if (!style || style === 'none') return;
-  
-  // Adjusted Margins
-  // marginX (Ends of label): Doubled to 16px (~2mm) to handle feed inaccuracies
-  const marginX = 16; 
-  // marginY (Sides of label): Kept at 8px (~1mm)
-  const marginY = 8;  
-
-  const x = marginX;
-  const y = marginY;
-  const w = width - (marginX * 2);
-  const h = height - (marginY * 2);
+  const marginX = 16; const marginY = 8;  
+  const x = marginX; const y = marginY;
+  const w = width - (marginX * 2); const h = height - (marginY * 2);
   
   ctx.save();
   ctx.strokeStyle = invert ? "#FFFFFF" : "#000000";
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.lineWidth = 4;
 
-  if (style === 'simple') {
-    ctx.strokeRect(x, y, w, h);
-  } else if (style === 'thick') {
-    ctx.lineWidth = 8;
-    ctx.strokeRect(x, y, w, h);
-  } else if (style === 'rounded') {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 20); 
-    ctx.stroke();
-  } else if (style === 'double') {
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, w, h);
-    ctx.strokeRect(x + 6, y + 6, w - 12, h - 12);
-  } else if (style === 'dashed') {
-    ctx.setLineDash([15, 10]); 
-    ctx.strokeRect(x, y, w, h);
-  } else if (style === 'ticket') {
-    const r = 15; 
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + h/2 - r);
+  if (style === 'simple') ctx.strokeRect(x, y, w, h);
+  else if (style === 'thick') { ctx.lineWidth = 8; ctx.strokeRect(x, y, w, h); }
+  else if (style === 'rounded') { ctx.beginPath(); ctx.roundRect(x, y, w, h, 20); ctx.stroke(); }
+  else if (style === 'double') { ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); ctx.strokeRect(x + 6, y + 6, w - 12, h - 12); }
+  else if (style === 'dashed') { ctx.setLineDash([15, 10]); ctx.strokeRect(x, y, w, h); }
+  else if (style === 'ticket') {
+    const r = 15; ctx.beginPath();
+    ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h/2 - r);
     ctx.arc(x + w, y + h/2, r, 1.5 * Math.PI, 0.5 * Math.PI, true);
-    ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x, y + h);
-    ctx.lineTo(x, y + h/2 + r);
+    ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h/2 + r);
     ctx.arc(x, y + h/2, r, 0.5 * Math.PI, 1.5 * Math.PI, true);
-    ctx.closePath();
-    ctx.stroke();
+    ctx.closePath(); ctx.stroke();
   } else if (style === 'cut_corners' || style === 'cut_corners_double') {
       const r = 15; 
       const drawPath = (inset) => {
-         const ix = x + inset;
-         const iy = y + inset;
-         const iw = w - 2*inset;
-         const ih = h - 2*inset;
-         ctx.beginPath();
-         ctx.moveTo(ix + r, iy);
-         ctx.lineTo(ix + iw - r, iy);
+         const ix = x + inset; const iy = y + inset; const iw = w - 2*inset; const ih = h - 2*inset;
+         ctx.beginPath(); ctx.moveTo(ix + r, iy); ctx.lineTo(ix + iw - r, iy);
          ctx.arc(ix + iw, iy, r, Math.PI, 0.5*Math.PI, true); 
-         ctx.lineTo(ix + iw, iy + ih - r);
-         ctx.arc(ix + iw, iy + ih, r, 1.5*Math.PI, Math.PI, true); 
-         ctx.lineTo(ix + r, iy + ih);
-         ctx.arc(ix, iy + ih, r, 0, 1.5*Math.PI, true); 
-         ctx.lineTo(ix, iy + r);
-         ctx.arc(ix, iy, r, 0.5*Math.PI, 0, true); 
-         ctx.closePath();
-         ctx.stroke();
+         ctx.lineTo(ix + iw, iy + ih - r); ctx.arc(ix + iw, iy + ih, r, 1.5*Math.PI, Math.PI, true); 
+         ctx.lineTo(ix + r, iy + ih); ctx.arc(ix, iy + ih, r, 0, 1.5*Math.PI, true); 
+         ctx.lineTo(ix, iy + r); ctx.arc(ix, iy, r, 0.5*Math.PI, 0, true); 
+         ctx.closePath(); ctx.stroke();
       };
-
-      if (style === 'cut_corners') {
-         ctx.lineWidth = 4;
-         drawPath(0);
-      } else {
-         ctx.lineWidth = 6; 
-         drawPath(0);
-         ctx.lineWidth = 2; 
-         drawPath(6); 
-      }
+      if (style === 'cut_corners') { ctx.lineWidth = 4; drawPath(0); } 
+      else { ctx.lineWidth = 6; drawPath(0); ctx.lineWidth = 2; drawPath(6); }
   } else if (style === 'brackets') {
-    ctx.lineWidth = 6;
-    const len = Math.min(w, h) / 3; 
+    ctx.lineWidth = 6; const len = Math.min(w, h) / 3; 
     ctx.beginPath();
     ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
     ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
@@ -222,89 +179,58 @@ function drawFrame(ctx, width, height, style, invert) {
     ctx.moveTo(x + len, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - len);
     ctx.stroke();
   }
-  
   ctx.restore();
 }
 
 export function renderTextCanvas(text, fontSize=40, alignment='center', invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, fontFamily='Inter, sans-serif', frameStyle='none') {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert);
-  
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
-  
   drawFrame(ctx, heightPx, widthPx, frameStyle, invert);
-
   ctx.fillStyle = invert ? "#FFFFFF" : "#000000";
   ctx.font = `${fontFamily.includes('bold') ? 'bold ' : ''}${fontSize}px ${fontFamily.replace('bold','').trim()}`;
   ctx.textBaseline = "middle"; 
-
   const lines = text.split('\n');
   const lineHeight = fontSize * 1.0; 
   const totalBlockHeight = lines.length * lineHeight;
-
   let x = 0;
-  if (alignment === 'left') {
-    ctx.textAlign = "left";
-    x = 10; 
-  } else if (alignment === 'right') {
-    ctx.textAlign = "right";
-    x = heightPx - 10; 
-  } else {
-    ctx.textAlign = "center";
-    x = heightPx / 2; 
-  }
-
-  // Y-Position: Stacked across width.
-  // Added +2 pixels offset for optical correction.
+  if (alignment === 'left') { ctx.textAlign = "left"; x = 10; } 
+  else if (alignment === 'right') { ctx.textAlign = "right"; x = heightPx - 10; } 
+  else { ctx.textAlign = "center"; x = heightPx / 2; }
   const startY = (widthPx - totalBlockHeight) / 2 + 2;
-
   lines.forEach((line, i) => {
     const y = startY + (i * lineHeight) + (lineHeight / 2);
     ctx.fillText(line, x, y);
   });
-
   ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
 export function renderImageCanvas(image, threshold=128, invert=false, labelWidthMM=12, labelLengthMM=40, dpi=8, dither=false, rotation=0, scalePct=100) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
-  
   let srcImage = image;
   if (rotation !== 0) {
      const rotCanvas = document.createElement('canvas');
-     if (rotation % 180 !== 0) {
-       rotCanvas.width = image.height;
-       rotCanvas.height = image.width;
-     } else {
-       rotCanvas.width = image.width;
-       rotCanvas.height = image.height;
-     }
+     if (rotation % 180 !== 0) { rotCanvas.width = image.height; rotCanvas.height = image.width; } 
+     else { rotCanvas.width = image.width; rotCanvas.height = image.height; }
      const rctx = rotCanvas.getContext('2d');
      rctx.translate(rotCanvas.width/2, rotCanvas.height/2);
      rctx.rotate(rotation * Math.PI / 180);
      rctx.drawImage(image, -image.width/2, -image.height/2);
      srcImage = rotCanvas;
   }
-
   let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
   ratio *= (scalePct / 100);
-
-  const dw = srcImage.width * ratio;
-  const dh = srcImage.height * ratio;
-  
+  const dw = srcImage.width * ratio; const dh = srcImage.height * ratio;
   ctx.save();
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   ctx.drawImage(srcImage, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
   ctx.restore();
-
-  const w = canvas.width;
-  const h = canvas.height;
+  const w = canvas.width; const h = canvas.height;
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
-  
   if (dither) {
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -312,8 +238,7 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
     }
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4;
-        const oldPixel = d[i];
+        const i = (y * w + x) * 4; const oldPixel = d[i];
         const newPixel = oldPixel < 128 ? 0 : 255;
         d[i] = d[i+1] = d[i+2] = newPixel;
         const quantError = oldPixel - newPixel;
@@ -324,23 +249,16 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
       }
     }
     if (invert) {
-       for (let i = 0; i < d.length; i += 4) {
-         const v = d[i] === 0 ? 255 : 0;
-         d[i] = d[i+1] = d[i+2] = v;
-       }
+       for (let i = 0; i < d.length; i += 4) { const v = d[i] === 0 ? 255 : 0; d[i] = d[i+1] = d[i+2] = v; }
     }
   } else {
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      let isDark = gray < threshold;
-      let finalVal = 255;
-      if (!invert) { if (isDark) finalVal = 0; } 
-      else { if (!isDark) finalVal = 0; }
-      d[i] = d[i + 1] = d[i + 2] = finalVal;
-      d[i + 3] = 255; 
+      let isDark = gray < threshold; let finalVal = 255;
+      if (!invert) { if (isDark) finalVal = 0; } else { if (!isDark) finalVal = 0; }
+      d[i] = d[i + 1] = d[i + 2] = finalVal; d[i + 3] = 255; 
     }
   }
-  
   ctx.putImageData(imgData, 0, 0);
   return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
@@ -364,19 +282,159 @@ export function renderBarcodeCanvas(value, type='CODE128', scale=2, labelWidthMM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-export async function renderQRCanvas(value, size=256, labelWidthMM=12, labelLengthMM=40, dpi=8) {
+export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthMM=12, labelLengthMM=40, dpi=8) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const qrCanvas = document.createElement('canvas');
-  await QRCode.toCanvas(qrCanvas, value, { width: size, margin: 0 });
+  
+  // Handle AZTEC via bwip-js
+  if (typeOrSize === 'AZTEC') {
+    try {
+      // Create a detached canvas for bwip-js
+      // bwip-js needs to draw to an ID or a detached canvas element
+      // We use toCanvas API
+      bwipjs.toCanvas(qrCanvas, {
+            bcid:        'azteccode',       // Barcode type
+            text:        value,             // Text to encode
+            scale:       3,                 // 3x scaling factor
+            height:      10,                // Bar height, in millimeters
+            includetext: false,             // Show human-readable text
+            textxalign:  'center',          // Always good to set this
+        });
+    } catch (e) {
+        // fallback or error
+        console.warn('Aztec error', e);
+    }
+  } else {
+    // Normal QR
+    // typeOrSize is actually EC level here (L, M, Q, H) passed from UI
+    // 'size' is unused for generation here because qrcode.min.js scales automatically, we control size via drawImage scaling
+    await QRCode.toCanvas(qrCanvas, value, { errorCorrectionLevel: typeOrSize, margin: 0 });
+  }
+
   const availableW = heightPx; 
   const availableH = widthPx; 
+  // Fit to label height (which is widthPx)
   const scale = Math.min(1, availableW / qrCanvas.width, availableH / qrCanvas.height);
   const dw = qrCanvas.width * scale;
   const dh = qrCanvas.height * scale;
+  
   ctx.save();
   ctx.translate(0, heightPx);
   ctx.rotate(-Math.PI / 2);
   ctx.drawImage(qrCanvas, (availableW - dw)/2, (availableH - dh)/2, dw, dh);
+  ctx.restore();
+  return { canvas, bytesPerRow, widthPx, heightPx };
+}
+
+// --- New Combined Canvas Renderer ---
+export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
+  // Data contains: { text: {en, pos, val, ...}, image: {...}, barcode: {...}, qr: {...} }
+  const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
+  
+  // Coordinate System:
+  // Canvas is aligned with print head (Tall and Thin). 
+  // Width = alignedWidth (e.g. 96px). Height = labelLength (e.g. 320px).
+  
+  // We are drawing "Horizontally" relative to the label look.
+  // So we use the rotated coordinate system logic like other functions.
+  // Center: X=HeightPx/2, Y=WidthPx/2.
+  // Left (Start of tape): Top of Canvas.
+  // Right (End of tape): Bottom of Canvas.
+  // Top (Upper edge): Right side of Canvas (WidthPx)
+  // Bottom (Lower edge): Left side of Canvas (0).
+  // Wait, D30 prints: 
+  // [  ] -> Feed direction V
+  // If I print text "A", rotated -90deg.
+  // It appears "A" on the tape properly.
+  
+  // Let's define 5 zones in the ROTATED space (Width x Height = 40mm x 12mm visual)
+  // Visual Width = heightPx (320). Visual Height = widthPx (96).
+  
+  const visW = heightPx;
+  const visH = widthPx;
+  
+  // Helper to get rect for position
+  const getRect = (pos) => {
+    if (pos === 'center') return { x: 0, y: 0, w: visW, h: visH };
+    if (pos === 'left')   return { x: 0, y: 0, w: visW * 0.25, h: visH }; // Start of tape
+    if (pos === 'right')  return { x: visW * 0.75, y: 0, w: visW * 0.25, h: visH }; // End of tape
+    if (pos === 'top')    return { x: 0, y: 0, w: visW, h: visH * 0.25 }; // Top edge
+    if (pos === 'bottom') return { x: 0, y: visH * 0.75, w: visW, h: visH * 0.25 }; // Bottom edge
+    return { x: 0, y: 0, w: visW, h: visH };
+  };
+
+  ctx.save();
+  // Transform to "Visual" coordinates
+  ctx.translate(0, canvas.height);
+  ctx.rotate(-Math.PI / 2);
+  // Now (0,0) is Top-Left of the visual label (Start of tape, Top edge).
+  
+  // Draw Center items first (Background)
+  const drawOrder = ['center', 'left', 'right', 'top', 'bottom'];
+  
+  for (const pos of drawOrder) {
+    const rect = getRect(pos);
+    
+    // Draw Text?
+    if (data.text.enabled && data.text.pos === pos) {
+       ctx.save();
+       // Clip to region
+       ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+       
+       ctx.fillStyle = "#000000";
+       ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
+       ctx.textBaseline = "middle"; 
+       ctx.textAlign = "center";
+       
+       // Center text in rect
+       const cx = rect.x + rect.w/2;
+       const cy = rect.y + rect.h/2;
+       ctx.fillText(data.text.val, cx, cy);
+       ctx.restore();
+    }
+    
+    // Draw Image?
+    if (data.image.enabled && data.image.pos === pos && data.image.img) {
+        // Basic fit logic
+        const img = data.image.img;
+        const ratio = Math.min(rect.w / img.width, rect.h / img.height);
+        const dw = img.width * ratio;
+        const dh = img.height * ratio;
+        const dx = rect.x + (rect.w - dw)/2;
+        const dy = rect.y + (rect.h - dh)/2;
+        ctx.drawImage(img, dx, dy, dw, dh);
+    }
+    
+    // Draw Barcode?
+    if (data.barcode.enabled && data.barcode.pos === pos) {
+        const bcCanvas = document.createElement('canvas');
+        try {
+            JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, margin:0 });
+            const ratio = Math.min(rect.w / bcCanvas.width, rect.h / bcCanvas.height);
+            const dw = bcCanvas.width * ratio;
+            const dh = bcCanvas.height * ratio;
+            const dx = rect.x + (rect.w - dw)/2;
+            const dy = rect.y + (rect.h - dh)/2;
+            ctx.drawImage(bcCanvas, dx, dy, dw, dh);
+        } catch(e) {}
+    }
+    
+    // Draw QR/Aztec?
+    if (data.qr.enabled && data.qr.pos === pos) {
+        const qCanvas = document.createElement('canvas');
+        // Use existing QR logic logic or simpler
+        // We assume standard QR for mix or fetch from QR tab logic?
+        // Simplification: Just render standard QR for now
+        await QRCode.toCanvas(qCanvas, data.qr.val, { margin: 0 });
+        const ratio = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
+        const dw = qCanvas.width * ratio;
+        const dh = qCanvas.height * ratio;
+        const dx = rect.x + (rect.w - dw)/2;
+        const dy = rect.y + (rect.h - dh)/2;
+        ctx.drawImage(qCanvas, dx, dy, dw, dh);
+    }
+  }
+
   ctx.restore();
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
