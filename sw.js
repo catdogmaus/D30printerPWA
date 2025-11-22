@@ -11,7 +11,8 @@ const ASSETS = [
   './icons/icon-monochrome.png',
   './libs/JsBarcode.all.min.js',
   './libs/qrcode.min.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap',
+  'https://cdn.jsdelivr.net/npm/bwip-js@3.4.3/dist/bwip-js-min.js'
 ];
 
 self.addEventListener('install', (e) => {
