@@ -118,7 +118,6 @@ function updateConnUI(connected) {
   if (!connected && batt) batt.style.display = 'none';
 }
 
-// canvas utilities
 export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) {
   const widthPx = Math.round(labelWidthMM * dpi);
   const heightPx = Math.round(labelLengthMM * dpi);
@@ -133,7 +132,6 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
-// --- Frame Logic (reused) ---
 function drawFrame(ctx, width, height, style, invert) {
   if (!style || style === 'none') return;
   const marginX = 16; const marginY = 8;  
@@ -286,35 +284,35 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const qrCanvas = document.createElement('canvas');
   
-  // Handle AZTEC via bwip-js
+  // AZTEC LOGIC UPDATED: Draw at fixed high resolution (4x scale) then downscale
   if (typeOrSize === 'AZTEC') {
     try {
-      // Create a detached canvas for bwip-js
-      // bwip-js needs to draw to an ID or a detached canvas element
-      // We use toCanvas API
       bwipjs.toCanvas(qrCanvas, {
-            bcid:        'azteccode',       // Barcode type
-            text:        value,             // Text to encode
-            scale:       3,                 // 3x scaling factor
-            height:      10,                // Bar height, in millimeters
-            includetext: false,             // Show human-readable text
-            textxalign:  'center',          // Always good to set this
+            bcid: 'azteccode',
+            text: value,
+            scale: 4, // Generate high res
+            includetext: false,
         });
-    } catch (e) {
-        // fallback or error
-        console.warn('Aztec error', e);
-    }
+    } catch (e) { console.warn('Aztec error', e); }
   } else {
-    // Normal QR
-    // typeOrSize is actually EC level here (L, M, Q, H) passed from UI
-    // 'size' is unused for generation here because qrcode.min.js scales automatically, we control size via drawImage scaling
+    // QR LOGIC UPDATED: Draw to canvas, let library decide size, then scaling handles the rest
     await QRCode.toCanvas(qrCanvas, value, { errorCorrectionLevel: typeOrSize, margin: 0 });
   }
 
   const availableW = heightPx; 
   const availableH = widthPx; 
-  // Fit to label height (which is widthPx)
-  const scale = Math.min(1, availableW / qrCanvas.width, availableH / qrCanvas.height);
+  
+  // SCALING LOGIC FIXED: Use requested 'size' (px) as target, constrained by label limits.
+  const targetSize = size;
+  
+  // Calculate scale to make the QR exactly targetSize pixels
+  // But ensure it doesn't exceed available label width/height
+  const fitScale = Math.min(availableW / qrCanvas.width, availableH / qrCanvas.height);
+  const requestedScale = targetSize / qrCanvas.width;
+  
+  // Use smaller of the two: either exact requested size, or shrink to fit if too big
+  const scale = Math.min(fitScale, requestedScale);
+  
   const dw = qrCanvas.width * scale;
   const dh = qrCanvas.height * scale;
   
@@ -326,112 +324,94 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// --- New Combined Canvas Renderer ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
-  // Data contains: { text: {en, pos, val, ...}, image: {...}, barcode: {...}, qr: {...} }
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
-  // Coordinate System:
-  // Canvas is aligned with print head (Tall and Thin). 
-  // Width = alignedWidth (e.g. 96px). Height = labelLength (e.g. 320px).
-  
-  // We are drawing "Horizontally" relative to the label look.
-  // So we use the rotated coordinate system logic like other functions.
-  // Center: X=HeightPx/2, Y=WidthPx/2.
-  // Left (Start of tape): Top of Canvas.
-  // Right (End of tape): Bottom of Canvas.
-  // Top (Upper edge): Right side of Canvas (WidthPx)
-  // Bottom (Lower edge): Left side of Canvas (0).
-  // Wait, D30 prints: 
-  // [  ] -> Feed direction V
-  // If I print text "A", rotated -90deg.
-  // It appears "A" on the tape properly.
-  
-  // Let's define 5 zones in the ROTATED space (Width x Height = 40mm x 12mm visual)
-  // Visual Width = heightPx (320). Visual Height = widthPx (96).
-  
+  // Visual Dimensions (Rotated)
   const visW = heightPx;
   const visH = widthPx;
   
-  // Helper to get rect for position
+  // Determine occupied slots
+  const slots = { left: false, right: false, top: false, bottom: false };
+  ['text','image','barcode','qr'].forEach(k => {
+      if (data[k].enabled && data[k].pos !== 'center') slots[data[k].pos] = true;
+  });
+
+  // Calculate Dynamic Center Area
+  const cx = slots.left ? visW * 0.25 : 0;
+  const cy = slots.top ? visH * 0.25 : 0;
+  const cw = visW - (slots.left ? visW * 0.25 : 0) - (slots.right ? visW * 0.25 : 0);
+  const ch = visH - (slots.top ? visH * 0.25 : 0) - (slots.bottom ? visH * 0.25 : 0);
+
   const getRect = (pos) => {
-    if (pos === 'center') return { x: 0, y: 0, w: visW, h: visH };
-    if (pos === 'left')   return { x: 0, y: 0, w: visW * 0.25, h: visH }; // Start of tape
-    if (pos === 'right')  return { x: visW * 0.75, y: 0, w: visW * 0.25, h: visH }; // End of tape
-    if (pos === 'top')    return { x: 0, y: 0, w: visW, h: visH * 0.25 }; // Top edge
-    if (pos === 'bottom') return { x: 0, y: visH * 0.75, w: visW, h: visH * 0.25 }; // Bottom edge
+    if (pos === 'center') return { x: cx, y: cy, w: cw, h: ch };
+    if (pos === 'left')   return { x: 0, y: 0, w: visW * 0.25, h: visH };
+    if (pos === 'right')  return { x: visW * 0.75, y: 0, w: visW * 0.25, h: visH };
+    if (pos === 'top')    return { x: 0, y: 0, w: visW, h: visH * 0.25 };
+    if (pos === 'bottom') return { x: 0, y: visH * 0.75, w: visW, h: visH * 0.25 };
     return { x: 0, y: 0, w: visW, h: visH };
   };
 
   ctx.save();
-  // Transform to "Visual" coordinates
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
-  // Now (0,0) is Top-Left of the visual label (Start of tape, Top edge).
   
-  // Draw Center items first (Background)
   const drawOrder = ['center', 'left', 'right', 'top', 'bottom'];
   
   for (const pos of drawOrder) {
     const rect = getRect(pos);
     
-    // Draw Text?
     if (data.text.enabled && data.text.pos === pos) {
        ctx.save();
-       // Clip to region
        ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
-       
        ctx.fillStyle = "#000000";
+       // Use requested font size
        ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
-       ctx.textBaseline = "middle"; 
-       ctx.textAlign = "center";
-       
-       // Center text in rect
-       const cx = rect.x + rect.w/2;
-       const cy = rect.y + rect.h/2;
-       ctx.fillText(data.text.val, cx, cy);
+       ctx.textBaseline = "middle"; ctx.textAlign = "center";
+       ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2);
        ctx.restore();
     }
     
-    // Draw Image?
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
-        // Basic fit logic
         const img = data.image.img;
-        const ratio = Math.min(rect.w / img.width, rect.h / img.height);
+        // Use requested scale %
+        let ratio = Math.min(rect.w / img.width, rect.h / img.height);
+        ratio *= (data.image.scalePct / 100);
         const dw = img.width * ratio;
         const dh = img.height * ratio;
-        const dx = rect.x + (rect.w - dw)/2;
-        const dy = rect.y + (rect.h - dh)/2;
-        ctx.drawImage(img, dx, dy, dw, dh);
+        ctx.drawImage(img, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
     }
     
-    // Draw Barcode?
     if (data.barcode.enabled && data.barcode.pos === pos) {
         const bcCanvas = document.createElement('canvas');
         try {
-            JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, margin:0 });
+            // Use requested barcode scale
+            JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, width: data.barcode.scale, margin:0 });
             const ratio = Math.min(rect.w / bcCanvas.width, rect.h / bcCanvas.height);
             const dw = bcCanvas.width * ratio;
             const dh = bcCanvas.height * ratio;
-            const dx = rect.x + (rect.w - dw)/2;
-            const dy = rect.y + (rect.h - dh)/2;
-            ctx.drawImage(bcCanvas, dx, dy, dw, dh);
+            ctx.drawImage(bcCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
         } catch(e) {}
     }
     
-    // Draw QR/Aztec?
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
-        // Use existing QR logic logic or simpler
-        // We assume standard QR for mix or fetch from QR tab logic?
-        // Simplification: Just render standard QR for now
+        // Check if AZTEC was selected in main tab? Combine tab doesn't have QR Type selector.
+        // We will assume QR default, OR we can fetch the type from the main QR tab if desired.
+        // For simplicity here, we assume standard QR unless we wire up a type selector in combine.
+        // Let's just use standard QR for combination.
         await QRCode.toCanvas(qCanvas, data.qr.val, { margin: 0 });
-        const ratio = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
-        const dw = qCanvas.width * ratio;
-        const dh = qCanvas.height * ratio;
-        const dx = rect.x + (rect.w - dw)/2;
-        const dy = rect.y + (rect.h - dh)/2;
-        ctx.drawImage(qCanvas, dx, dy, dw, dh);
+        
+        // Logic for QR sizing in combine:
+        // Use 'size' input (pixels) as target
+        const targetSize = data.qr.size;
+        const fitScale = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
+        const reqScale = targetSize / qCanvas.width;
+        const scale = Math.min(fitScale, reqScale);
+        
+        const dw = qCanvas.width * scale;
+        const dh = qCanvas.height * scale;
+        ctx.drawImage(qCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
     }
   }
 
