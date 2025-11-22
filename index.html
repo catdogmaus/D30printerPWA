@@ -3,50 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  
-  <!-- Primary SEO -->
-  <title>D30 Printer PWA - Web Bluetooth Label Maker</title>
-  <meta name="description" content="Free open-source web app for Phomemo D30 & D30C thermal printers. Print labels, barcodes, QR codes, and images directly from your browser via Bluetooth. Offline capable." />
-  <meta name="keywords" content="Phomemo D30, Phomemo D30C, Thermal Printer, Web Bluetooth, Label Printer, PWA, Barcode Generator, QR Code, Aztec Code, Bluetooth Printer App" />
-  <meta name="author" content="Catdogmaus" />
-  <meta name="robots" content="index, follow" />
-  
+  <title>D30 Printer PWA</title>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#f0f4f8" />
-  <link rel="canonical" href="https://catdogmaus.github.io/D30printerPWA/" />
-
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://catdogmaus.github.io/D30printerPWA/" />
-  <meta property="og:title" content="D30 Printer PWA" />
-  <meta property="og:description" content="Print custom labels, barcodes, Aztec codes, and images to your Phomemo D30/D30C thermal printer directly from your browser." />
-  <meta property="og:image" content="https://catdogmaus.github.io/D30printerPWA/icons/icon-256.png" />
-
-  <!-- Twitter -->
-  <meta property="twitter:card" content="summary" />
-  <meta property="twitter:title" content="D30 Printer PWA" />
-  <meta property="twitter:description" content="Web-based controller for Phomemo D30 thermal printers." />
-  <meta property="twitter:image" content="https://catdogmaus.github.io/D30printerPWA/icons/icon-256.png" />
-
-  <!-- Mobile Web App Capabilities -->
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="D30 Printer" />
-  
-  <link rel="apple-touch-icon" href="icons/icon-maskable.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-256.png" />
-
   <link href="styles/tailwind.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <!-- Local Libraries for Offline Support -->
   <script src="libs/JsBarcode.all.min.js"></script>
   <script src="libs/qrcode.min.js"></script>
-  <!-- Added bwip-js for Aztec support -->
   <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.4.3/dist/bwip-js-min.js"></script>
   
   <style>
-    /* Liquid Glass Theme Variables */
     :root {
       --glass-bg: rgba(240, 244, 248, 0.75);
       --glass-border: rgba(255, 255, 255, 0.8);
@@ -69,21 +35,17 @@
 
     .container { max-width: 1100px; margin: 0 auto; padding: 1rem; }
 
-    /* Glass Header */
     header {
       padding: 12px 0;
       background: rgba(255, 255, 255, 0.75);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--glass-border);
-      position: sticky;
-      top: 0;
-      z-index: 40;
+      position: sticky; top: 0; z-index: 40;
     }
 
     .small { font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-    /* Glass Card */
     .card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
@@ -95,169 +57,46 @@
     }
 
     #previewCanvasWrap { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 120px; }
-    
-    .preview-canvas {
-      display: block; 
-      width: auto; 
-      height: auto; 
-      border-radius: 8px; 
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      background: white;
-    }
+    .preview-canvas { display: block; width: auto; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: white; }
 
-    /* Tabs Layout */
-    .tab-row { 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: baseline; 
-      margin-top: 1rem; 
-      flex-wrap: wrap; 
-      gap: 12px; 
-    }
-    
+    .tab-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 1rem; flex-wrap: wrap; gap: 12px; }
     .tabs { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-
-    /* Glass Tabs */
-    .tab {
-      padding: 0.6rem 1.2rem;
-      line-height: 1.5;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.5);
-      border: 1px solid var(--glass-border);
-      cursor: pointer;
-      font-weight: 500;
-      color: var(--text-muted);
-      transition: all 0.2s ease;
-    }
-    
+    .tab { padding: 0.6rem 1.2rem; line-height: 1.5; border-radius: 6px; background: rgba(255, 255, 255, 0.5); border: 1px solid var(--glass-border); cursor: pointer; font-weight: 500; color: var(--text-muted); transition: all 0.2s ease; }
     .tab:hover { background: rgba(255,255,255,0.8); }
-    
-    .tab.active {
-      background: rgba(59, 130, 246, 0.15);
-      color: var(--primary);
-      border-color: rgba(59, 130, 246, 0.3);
-      box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
-    }
+    .tab.active { background: rgba(59, 130, 246, 0.15); color: var(--primary); border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 0 10px rgba(59, 130, 246, 0.1); }
 
-    /* Floating Action Button */
-    .fab {
-      position: fixed; right: 20px; bottom: 24px; 
-      width: 64px; height: 64px; 
-      border-radius: 20px; 
-      background: #10b981; 
-      color: white; 
-      display: flex; align-items: center; justify-content: center; 
-      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3); 
-      z-index: 50; 
-      border: 1px solid rgba(255,255,255,0.3);
-      transition: transform 0.2s;
-    }
+    .fab { position: fixed; right: 20px; bottom: 24px; width: 64px; height: 64px; border-radius: 20px; background: #10b981; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3); z-index: 50; border: 1px solid rgba(255,255,255,0.3); transition: transform 0.2s; }
     .fab:active { transform: scale(0.95); }
 
-    /* Glass Inputs */
-    input, select, textarea, .glass-input {
-      padding: 0.7rem;
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.6);
-      border-radius: 10px;
-      width: 100%;
-      font-size: 1rem;
-      font-family: inherit;
-      color: var(--text-main);
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-      transition: border-color 0.2s, background 0.2s;
-    }
-    
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      background: #ffffff;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
+    input, select, textarea, .glass-input { padding: 0.7rem; background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 10px; width: 100%; font-size: 1rem; font-family: inherit; color: var(--text-main); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); transition: border-color 0.2s, background 0.2s; }
+    input:focus, select:focus, textarea:focus { outline: none; background: #ffffff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
     textarea { resize: vertical; min-height: 80px; }
     input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; accent-color: var(--primary); }
     
-    /* Range Slider */
-    input[type=range] {
-      -webkit-appearance: none;
-      background: transparent;
-      padding: 0;
-      box-shadow: none;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      height: 20px; width: 20px;
-      border-radius: 50%;
-      background: var(--primary);
-      cursor: pointer;
-      margin-top: -8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
-    input[type=range]::-webkit-slider-runnable-track {
-      width: 100%; height: 4px;
-      background: #cbd5e1;
-      border-radius: 2px;
-    }
+    input[type=range] { -webkit-appearance: none; background: transparent; padding: 0; box-shadow: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: var(--primary); cursor: pointer; margin-top: -8px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #cbd5e1; border-radius: 2px; }
 
     .row { display: flex; gap: 0.5rem; align-items: center; }
-
-    /* Buttons */
-    button.btn {
-      padding: 8px 16px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      background: var(--primary);
-      color: #fff;
-      font-weight: 500;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
-      transition: transform 0.1s;
-    }
+    button.btn { padding: 8px 16px; border-radius: 10px; border: none; cursor: pointer; background: var(--primary); color: #fff; font-weight: 500; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25); transition: transform 0.1s; }
     button.btn:active { transform: translateY(1px); }
     
-    /* Copies Input Wrapper */
-    .copies-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: rgba(255, 255, 255, 0.6);
-        padding: 0.6rem 1rem;
-        line-height: 1.5;
-        border-radius: 6px;
-        border: 1px solid var(--glass-border);
-    }
-    
-    /* Layout Utils */
+    .copies-wrapper { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.6); padding: 0.6rem 1rem; line-height: 1.5; border-radius: 6px; border: 1px solid var(--glass-border); }
     .control-group { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
     .control-block { flex: 1 1 280px; }
     .control-row { display: flex; gap: 12px; align-items: flex-end; }
     .control-row > div { flex: 1; }
 
-    /* Help Modal */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.3); backdrop-filter: blur(4px);
-      display: none; align-items: center; justify-content: center; z-index: 100;
-    }
-    .modal-content {
-      background: #ffffff; width: 90%; max-width: 500px;
-      padding: 24px; border-radius: 16px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-      animation: fadeUp 0.3s ease;
-    }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; }
+    .modal-content { background: #ffffff; width: 90%; max-width: 500px; padding: 24px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); animation: fadeUp 0.3s ease; }
     @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
     .code-box { background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #334155; }
     
-    /* Combine Tab Mixer Row */
-    .mixer-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px; 
-      background: rgba(255,255,255,0.4); 
-      border-radius: 8px; border: 1px solid var(--glass-border);
-      margin-bottom: 8px;
-    }
-    .mixer-label { font-weight: 500; flex: 1; display: flex; align-items: center; gap: 8px; }
+    /* Mixer Row Updated */
+    .mixer-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.4); border-radius: 8px; border: 1px solid var(--glass-border); margin-bottom: 8px; }
+    .mixer-label { font-weight: 500; flex: 1; display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+    .mixer-input-sm { width: 70px; text-align: center; padding: 0.5rem; font-size: 0.9rem; }
+    .mixer-select { width: 110px; padding: 0.5rem; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -315,7 +154,6 @@
       <div id="tab-text" class="tab-content">
         <label for="textInput" class="small">Text (Multi-line supported)</label>
         <textarea id="textInput" placeholder="Hello D30C"></textarea>
-        
         <div class="control-group">
           <div class="control-block">
             <label for="fontSize" class="small">Font size</label>
@@ -461,23 +299,22 @@
         </div>
       </div>
 
-      <!-- COMBINE TAB -->
+      <!-- COMBINE TAB (New) -->
       <div id="tab-combine" class="tab-content" style="display:none;">
         <h4 class="small" style="margin-bottom:12px; font-weight:600;">Layer Mixer</h4>
         <div style="font-size:0.85rem; color:#64748b; margin-bottom:12px;">
-          Select elements to combine. Center fills the label. Others take 25% edges.
+          Configure elements. Center element automatically fills remaining space.
         </div>
 
-        <!-- Mixer Rows -->
         <div class="mixer-row">
           <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixText" checked>
-            <span>Text</span>
+            <input type="checkbox" id="mixText" checked> <span>Text</span>
           </label>
-          <select id="mixTextPos" style="width:120px;">
+          <input id="mixTextSize" type="number" value="36" class="mixer-input-sm" title="Font Size" />
+          <select id="mixTextPos" class="mixer-select">
             <option value="center" selected>Center</option>
-            <option value="left">Left (Start)</option>
-            <option value="right">Right (End)</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
           </select>
@@ -485,13 +322,13 @@
 
         <div class="mixer-row">
           <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixImage">
-            <span>Image</span>
+            <input type="checkbox" id="mixImage"> <span>Image</span>
           </label>
-          <select id="mixImagePos" style="width:120px;">
+          <input id="mixImageScale" type="number" value="100" class="mixer-input-sm" title="Scale %" />
+          <select id="mixImagePos" class="mixer-select">
             <option value="center">Center</option>
-            <option value="left" selected>Left (Start)</option>
-            <option value="right">Right (End)</option>
+            <option value="left" selected>Left</option>
+            <option value="right">Right</option>
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
           </select>
@@ -499,13 +336,13 @@
 
         <div class="mixer-row">
           <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixBarcode">
-            <span>Barcode</span>
+            <input type="checkbox" id="mixBarcode"> <span>Barcode</span>
           </label>
-          <select id="mixBarcodePos" style="width:120px;">
+          <input id="mixBarcodeScale" type="number" value="2" class="mixer-input-sm" title="Scale" />
+          <select id="mixBarcodePos" class="mixer-select">
             <option value="center">Center</option>
-            <option value="left">Left (Start)</option>
-            <option value="right">Right (End)</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
             <option value="top">Top</option>
             <option value="bottom" selected>Bottom</option>
           </select>
@@ -513,13 +350,13 @@
 
         <div class="mixer-row">
           <label class="mixer-label" style="cursor:pointer">
-            <input type="checkbox" id="mixQR">
-            <span>QR/Aztec</span>
+            <input type="checkbox" id="mixQR"> <span>QR/Aztec</span>
           </label>
-          <select id="mixQRPos" style="width:120px;">
+          <input id="mixQRSize" type="number" value="70" class="mixer-input-sm" title="Size px" />
+          <select id="mixQRPos" class="mixer-select">
             <option value="center">Center</option>
-            <option value="left" selected>Left (Start)</option>
-            <option value="right">Right (End)</option>
+            <option value="left" selected>Left</option>
+            <option value="right">Right</option>
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
           </select>
@@ -528,7 +365,6 @@
 
       <!-- SETTINGS TAB -->
       <div id="tab-settings" class="tab-content" style="display:none;">
-        <!-- Presets -->
         <div style="margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(0,0,0,0.05);">
            <h4 class="small" style="font-weight:600; margin-bottom:8px;">Saved Presets</h4>
            <div class="row">
@@ -554,7 +390,7 @@
                </div>
                <div style="flex:1; min-width:140px;">
                   <label class="small" style="visibility:hidden">Detect</label>
-                  <button id="detectLabelBtn" class="btn" style="width:100%; padding:0.7rem; background:#64748b; font-size:0.9rem; white-space:nowrap;" title="Not implemented">Auto Detect (N/A)</button>
+                  <button id="detectLabelBtn" class="btn" style="width:100%; padding:0.7rem; background:#64748b; font-size:0.9rem; white-space:nowrap;" title="This feature is currently not implemented">Auto Detect (N/A)</button>
                </div>
              </div>
           </div>
@@ -579,7 +415,6 @@
         </div>
       </div>
 
-      <!-- LOGS TAB -->
       <div id="tab-logs" class="tab-content" style="display:none;">
         <h4 class="small">Logs</h4>
         <textarea id="logArea" style="height:220px; font-family:monospace; width:100%; font-size:0.8rem; background:rgba(0,0,0,0.03);"></textarea>
@@ -587,14 +422,12 @@
     </section>
   </main>
 
-  <!-- Help Modal -->
   <div id="installModal" class="modal-overlay">
     <div class="modal-content">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h2 style="margin:0; font-size:1.2rem; font-weight:600;">How to Install</h2>
         <button id="closeModalBtn" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#64748b;">&times;</button>
       </div>
-      
       <div style="font-size:0.95rem; line-height:1.5; color:#334155;">
         <p>This app works best when installed on your device. It allows offline use and full-screen experience.</p>
         <h3 style="font-size:1rem; font-weight:600; margin:16px 0 8px;">Browser Requirements</h3>
@@ -607,7 +440,6 @@
         <h3 style="font-size:1rem; font-weight:600; margin:16px 0 8px;">iOS (iPhone/iPad)</h3>
         <p>Open in <strong>Safari</strong>, tap the <strong>Share</strong> icon, scroll down and select <strong>Add to Home Screen</strong>.</p>
       </div>
-
       <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">
           <input type="checkbox" id="dontShowAgain" /> Don't show again
