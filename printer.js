@@ -132,6 +132,7 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
 }
 
+// --- Frame Logic (reused) ---
 function drawFrame(ctx, width, height, style, invert) {
   if (!style || style === 'none') return;
   const marginX = 16; const marginY = 8;  
@@ -284,33 +285,21 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   const qrCanvas = document.createElement('canvas');
   
-  // AZTEC LOGIC UPDATED: Draw at fixed high resolution (4x scale) then downscale
   if (typeOrSize === 'AZTEC') {
     try {
-      bwipjs.toCanvas(qrCanvas, {
-            bcid: 'azteccode',
-            text: value,
-            scale: 4, // Generate high res
-            includetext: false,
-        });
+      bwipjs.toCanvas(qrCanvas, { bcid: 'azteccode', text: value, scale: 4, includetext: false });
     } catch (e) { console.warn('Aztec error', e); }
   } else {
-    // QR LOGIC UPDATED: Draw to canvas, let library decide size, then scaling handles the rest
     await QRCode.toCanvas(qrCanvas, value, { errorCorrectionLevel: typeOrSize, margin: 0 });
   }
 
   const availableW = heightPx; 
   const availableH = widthPx; 
   
-  // SCALING LOGIC FIXED: Use requested 'size' (px) as target, constrained by label limits.
+  // Sizing logic
   const targetSize = size;
-  
-  // Calculate scale to make the QR exactly targetSize pixels
-  // But ensure it doesn't exceed available label width/height
   const fitScale = Math.min(availableW / qrCanvas.width, availableH / qrCanvas.height);
   const requestedScale = targetSize / qrCanvas.width;
-  
-  // Use smaller of the two: either exact requested size, or shrink to fit if too big
   const scale = Math.min(fitScale, requestedScale);
   
   const dw = qrCanvas.width * scale;
@@ -324,32 +313,73 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
+// --- Updated Combined Logic ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
-  // Visual Dimensions (Rotated)
-  const visW = heightPx;
-  const visH = widthPx;
+  // Visually rotated dimensions (40mm x 12mm)
+  // W = heightPx, H = widthPx
+  // Add safety margins (16px Left/Right)
+  const mx = 16;
+  const visW = heightPx - (2*mx); // Usable width
+  const visH = widthPx; // Full height available
   
-  // Determine occupied slots
-  const slots = { left: false, right: false, top: false, bottom: false };
+  // Determine layout zones based on user selection
+  const slots = { left: false, right: false };
   ['text','image','barcode','qr'].forEach(k => {
-      if (data[k].enabled && data[k].pos !== 'center') slots[data[k].pos] = true;
+      if (data[k].enabled) {
+          if (data[k].pos === 'left') slots.left = true;
+          if (data[k].pos === 'right') slots.right = true;
+      }
   });
 
-  // Calculate Dynamic Center Area
-  const cx = slots.left ? visW * 0.25 : 0;
-  const cy = slots.top ? visH * 0.25 : 0;
-  const cw = visW - (slots.left ? visW * 0.25 : 0) - (slots.right ? visW * 0.25 : 0);
-  const ch = visH - (slots.top ? visH * 0.25 : 0) - (slots.bottom ? visH * 0.25 : 0);
-
+  // Calculate Zone Boundaries relative to usable area
+  // Start of label (Left) is at mx.
+  
+  // Left Zone: 25% of usable width, full height.
+  const lx = mx; 
+  const lw = slots.left ? visW * 0.25 : 0;
+  
+  // Right Zone: 25% of usable width, full height.
+  const rw = slots.right ? visW * 0.25 : 0;
+  const rx = mx + visW - rw;
+  
+  // Center Span (Space between Left and Right)
+  const sx = lx + lw;
+  const sw = visW - lw - rw;
+  
+  // Top/Bottom logic within Center Span
+  // They take 25% of height, full width of center span.
+  // We check if anything is actually in top/bottom to reserve space?
+  // User said: "Left/Right push Top/Bottom". This implies Top/Bottom live in the center span.
+  
   const getRect = (pos) => {
-    if (pos === 'center') return { x: cx, y: cy, w: cw, h: ch };
-    if (pos === 'left')   return { x: 0, y: 0, w: visW * 0.25, h: visH };
-    if (pos === 'right')  return { x: visW * 0.75, y: 0, w: visW * 0.25, h: visH };
-    if (pos === 'top')    return { x: 0, y: 0, w: visW, h: visH * 0.25 };
-    if (pos === 'bottom') return { x: 0, y: visH * 0.75, w: visW, h: visH * 0.25 };
-    return { x: 0, y: 0, w: visW, h: visH };
+    if (pos === 'left') return { x: lx, y: 0, w: lw, h: visH };
+    if (pos === 'right') return { x: rx, y: 0, w: rw, h: visH };
+    
+    // Center Area items (Top/Bottom/Center)
+    if (pos === 'top')    return { x: sx, y: 0, w: sw, h: visH * 0.25 };
+    if (pos === 'bottom') return { x: sx, y: visH * 0.75, w: sw, h: visH * 0.25 };
+    
+    // Center Position: Fills remaining vertical space between top/bottom
+    // We need to know if top/bottom are occupied to shrink center?
+    // Simplified: Center takes middle 50% height if T/B exist, or full height if not?
+    // User said "Center fills remaining".
+    // Let's check what's enabled in Top/Bottom.
+    let topUsed = false; let botUsed = false;
+    ['text','image','barcode','qr'].forEach(k => {
+        if (data[k].enabled) {
+            if (data[k].pos === 'top') topUsed = true;
+            if (data[k].pos === 'bottom') botUsed = true;
+        }
+    });
+    
+    const cy = topUsed ? visH * 0.25 : 0;
+    const ch = visH - (topUsed ? visH*0.25 : 0) - (botUsed ? visH*0.25 : 0);
+    
+    if (pos === 'center') return { x: sx, y: cy, w: sw, h: ch };
+    
+    return { x: 0, y: 0, w: 0, h: 0 };
   };
 
   ctx.save();
@@ -360,12 +390,12 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   
   for (const pos of drawOrder) {
     const rect = getRect(pos);
-    
+    if (rect.w <= 0 || rect.h <= 0) continue;
+
     if (data.text.enabled && data.text.pos === pos) {
        ctx.save();
        ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
        ctx.fillStyle = "#000000";
-       // Use requested font size
        ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
        ctx.textBaseline = "middle"; ctx.textAlign = "center";
        ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2);
@@ -374,7 +404,6 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
         const img = data.image.img;
-        // Use requested scale %
         let ratio = Math.min(rect.w / img.width, rect.h / img.height);
         ratio *= (data.image.scalePct / 100);
         const dw = img.width * ratio;
@@ -385,7 +414,6 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     if (data.barcode.enabled && data.barcode.pos === pos) {
         const bcCanvas = document.createElement('canvas');
         try {
-            // Use requested barcode scale
             JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, width: data.barcode.scale, margin:0 });
             const ratio = Math.min(rect.w / bcCanvas.width, rect.h / bcCanvas.height);
             const dw = bcCanvas.width * ratio;
@@ -396,14 +424,11 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
-        // Check if AZTEC was selected in main tab? Combine tab doesn't have QR Type selector.
-        // We will assume QR default, OR we can fetch the type from the main QR tab if desired.
-        // For simplicity here, we assume standard QR unless we wire up a type selector in combine.
-        // Let's just use standard QR for combination.
+        // Generate standard QR or Aztec based on... wait, Combine tab doesn't select type.
+        // We default to Standard QR unless we add a selector.
         await QRCode.toCanvas(qCanvas, data.qr.val, { margin: 0 });
         
-        // Logic for QR sizing in combine:
-        // Use 'size' input (pixels) as target
+        // Scale logic: Use requested pixel size as target
         const targetSize = data.qr.size;
         const fitScale = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
         const reqScale = targetSize / qCanvas.width;
