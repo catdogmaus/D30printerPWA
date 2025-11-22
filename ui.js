@@ -234,32 +234,38 @@ async function updatePreview(){
       const ec = $('qrEc').value; 
       obj = await renderQRCanvas($('qrInput').value||'', ec, Number($('qrSize').value||70), labelW, labelH, dpi);
     } else if (shown === 'tab-combine') {
-        const data = {
+         const data = {
             text: {
                 enabled: $('mixText').checked,
                 pos: $('mixTextPos').value,
                 val: $('textInput').value || $('textInput').placeholder,
-                fontSize: Number($('mixTextSize').value||36), // Using new input
+                fontSize: Number($('mixTextSize').value||36),
                 fontFamily: $('fontFamily').value,
                 bold: $('fontBold').checked
             },
             image: {
                 enabled: $('mixImage').checked,
                 pos: $('mixImagePos').value,
-                scalePct: Number($('mixImageScale').value||100), // New input
+                scalePct: Number($('mixImageScale').value||100),
+                // Grab visual settings from Image tab
+                threshold: Number($('imageThreshold').value||128),
+                dither: $('imageDither').checked,
+                invert: $('imageInvert').checked,
+                rotation: imageRotation, 
                 img: null
             },
             barcode: {
                 enabled: $('mixBarcode').checked,
                 pos: $('mixBarcodePos').value,
                 val: $('barcodeInput').value,
-                scale: Number($('mixBarcodeScale').value||2) // New input
+                scale: Number($('mixBarcodeScale').value||2)
             },
             qr: {
                 enabled: $('mixQR').checked,
                 pos: $('mixQRPos').value,
                 val: $('qrInput').value,
-                size: Number($('mixQRSize').value||70) // New input
+                size: Number($('mixQRSize').value||70),
+                type: $('qrEc').value // Pass type (L, M, AZTEC)
             }
         };
         
@@ -400,13 +406,14 @@ function setup(){
       } else if (shown === 'tab-barcode') {
          obj = renderBarcodeCanvas($('barcodeInput').value, $('barcodeType').value, Number($('barcodeScale').value), labelW, labelH, dpi);
       } else if (shown === 'tab-qr') {
-         obj = await renderQRCanvas($('qrInput').value, $('qrEc').value, Number($('qrSize').value), labelW, labelH, dpi);
+         const ec = $('qrEc').value; 
+         obj = await renderQRCanvas($('qrInput').value||'', ec, Number($('qrSize').value||70), labelW, labelH, dpi);
       } else if (shown === 'tab-combine') {
          const data = {
             text: { enabled: $('mixText').checked, pos: $('mixTextPos').value, val: $('textInput').value||$('textInput').placeholder, fontSize: Number($('mixTextSize').value||36), fontFamily: $('fontFamily').value, bold: $('fontBold').checked },
-            image: { enabled: $('mixImage').checked, pos: $('mixImagePos').value, scalePct: Number($('mixImageScale').value||100), img: null },
+            image: { enabled: $('mixImage').checked, pos: $('mixImagePos').value, scalePct: Number($('mixImageScale').value||100), threshold: Number($('imageThreshold').value||128), dither: $('imageDither').checked, invert: $('imageInvert').checked, rotation: imageRotation, img: null },
             barcode: { enabled: $('mixBarcode').checked, pos: $('mixBarcodePos').value, val: $('barcodeInput').value, scale: Number($('mixBarcodeScale').value||2) },
-            qr: { enabled: $('mixQR').checked, pos: $('mixQRPos').value, val: $('qrInput').value, size: Number($('mixQRSize').value||70) }
+            qr: { enabled: $('mixQR').checked, pos: $('mixQRPos').value, val: $('qrInput').value, size: Number($('mixQRSize').value||70), type: $('qrEc').value }
          };
          if (data.image.enabled) {
             const cdata = $('imagePreview')?.dataset?.canvas;
