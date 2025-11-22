@@ -218,38 +218,32 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
      rctx.drawImage(image, -image.width/2, -image.height/2);
      srcImage = rotCanvas;
   }
-  
-  // Use temporary canvas to process pixels WITHOUT rotation interference
-  // 1. Calculate Target Dimensions
   let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
   ratio *= (scalePct / 100);
-  const dw = Math.floor(srcImage.width * ratio);
-  const dh = Math.floor(srcImage.height * ratio);
-  
-  // 2. Process Image on Temp Canvas
-  const tempCv = document.createElement('canvas');
-  tempCv.width = dw; tempCv.height = dh;
-  const tCtx = tempCv.getContext('2d');
-  tCtx.drawImage(srcImage, 0, 0, dw, dh);
-  
-  const iData = tCtx.getImageData(0, 0, dw, dh);
-  const d = iData.data;
-  
+  const dw = srcImage.width * ratio; const dh = srcImage.height * ratio;
+  ctx.save();
+  ctx.translate(0, canvas.height);
+  ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(srcImage, (heightPx - dw)/2, (widthPx - dh)/2, dw, dh);
+  ctx.restore();
+  const w = canvas.width; const h = canvas.height;
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
   if (dither) {
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       d[i] = d[i+1] = d[i+2] = gray;
     }
-    for (let y = 0; y < dh; y++) {
-      for (let x = 0; x < dw; x++) {
-        const i = (y * dw + x) * 4; const oldPixel = d[i];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4; const oldPixel = d[i];
         const newPixel = oldPixel < 128 ? 0 : 255;
         d[i] = d[i+1] = d[i+2] = newPixel;
         const quantError = oldPixel - newPixel;
-        if (x + 1 < dw) d[((y * dw + x + 1) * 4)] += quantError * 7 / 16;
-        if (x - 1 >= 0 && y + 1 < dh) d[(( (y + 1) * dw + x - 1) * 4)] += quantError * 3 / 16;
-        if (y + 1 < dh) d[(( (y + 1) * dw + x) * 4)] += quantError * 5 / 16;
-        if (x + 1 < dw && y + 1 < dh) d[(( (y + 1) * dw + x + 1) * 4)] += quantError * 1 / 16;
+        if (x + 1 < w) d[((y * w + x + 1) * 4)] += quantError * 7 / 16;
+        if (x - 1 >= 0 && y + 1 < h) d[(( (y + 1) * w + x - 1) * 4)] += quantError * 3 / 16;
+        if (y + 1 < h) d[(( (y + 1) * w + x) * 4)] += quantError * 5 / 16;
+        if (x + 1 < w && y + 1 < h) d[(( (y + 1) * w + x + 1) * 4)] += quantError * 1 / 16;
       }
     }
     if (invert) {
@@ -263,15 +257,7 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
       d[i] = d[i + 1] = d[i + 2] = finalVal; d[i + 3] = 255; 
     }
   }
-  tCtx.putImageData(iData, 0, 0);
-
-  // 3. Draw Processed Temp Canvas onto Main Canvas (Rotated)
-  ctx.save();
-  ctx.translate(0, canvas.height);
-  ctx.rotate(-Math.PI / 2);
-  ctx.drawImage(tempCv, (heightPx - dw)/2, (widthPx - dh)/2);
-  ctx.restore();
-  
+  ctx.putImageData(imgData, 0, 0);
   return { canvas, bytesPerRow, widthPx, heightPx, bakedInvert: true };
 }
 
@@ -325,6 +311,7 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
+// --- Updated Combined Logic: STRICT LAYERED APPROACH ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
@@ -371,13 +358,15 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   ctx.translate(0, canvas.height);
   ctx.rotate(-Math.PI / 2);
   
-  const drawOrder = ['center', 'left', 'right', 'top', 'bottom'];
-  
-  for (const pos of drawOrder) {
+  // Define all positions
+  const positions = ['center', 'left', 'right', 'top', 'bottom'];
+
+  // LAYER 1: IMAGES (Background)
+  // We iterate through all positions to find any images and draw them first.
+  for (const pos of positions) {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
 
-    // 1. DRAW IMAGE FIRST (Background Layer)
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
         let img = data.image.img;
         if (data.image.rotation !== 0) {
@@ -396,7 +385,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         const dw = Math.floor(img.width * ratio);
         const dh = Math.floor(img.height * ratio);
         
-        // TEMP CANVAS PROCESS (Fixes rotation/dither bug)
+        // Use Temp Canvas to isolate image processing
         const tCv = document.createElement('canvas');
         tCv.width = dw; tCv.height = dh;
         const tCtx = tCv.getContext('2d');
@@ -429,15 +418,24 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
             }
         }
         if (data.image.invert) {
-            for(let i=0; i<dd.length; i+=4) { const v = dd[i] === 0 ? 255 : 0; dd[i]=dd[i+1]=dd[i+2]=v; }
+            for(let i=0; i<dd.length; i+=4) {
+                const v = dd[i] === 0 ? 255 : 0;
+                dd[i]=dd[i+1]=dd[i+2]=v;
+            }
         }
         tCtx.putImageData(iData, 0, 0);
         
-        // Draw processed image to main
+        // Draw processed image to main canvas
         ctx.drawImage(tCv, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2);
     }
-    
-    // 2. DRAW BARCODES
+  }
+
+  // LAYER 2: CONTENT (Foreground)
+  // Iterate all positions again to draw text, barcodes, and QRs on top
+  for (const pos of positions) {
+    const rect = getRect(pos);
+    if (rect.w <= 0 || rect.h <= 0) continue;
+
     if (data.barcode.enabled && data.barcode.pos === pos) {
         const bcCanvas = document.createElement('canvas');
         try {
@@ -449,7 +447,6 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         } catch(e) {}
     }
     
-    // 3. DRAW QR/AZTEC
     if (data.qr.enabled && data.qr.pos === pos) {
         const qCanvas = document.createElement('canvas');
         if (data.qr.type === 'AZTEC') {
@@ -462,12 +459,12 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
         const fitScale = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
         const reqScale = targetSize / qCanvas.width;
         const scale = Math.min(fitScale, reqScale);
+        
         const dw = qCanvas.width * scale;
         const dh = qCanvas.height * scale;
         ctx.drawImage(qCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
     }
 
-    // 4. DRAW TEXT LAST
     if (data.text.enabled && data.text.pos === pos) {
        ctx.save();
        ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
