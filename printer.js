@@ -218,8 +218,6 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
      rctx.drawImage(image, -image.width/2, -image.height/2);
      srcImage = rotCanvas;
   }
-  
-  // Use temporary canvas to process pixels WITHOUT rotation interference
   let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
   ratio *= (scalePct / 100);
   const dw = Math.floor(srcImage.width * ratio);
@@ -345,9 +343,8 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   const sx = lx + lw;
   const sw = visW - lw - rw;
   
-  // Vertical split ratio for Top/Bottom zones
-  // UPDATED TO 15% (0.15)
-  const vSplit = 0.15;
+  // 20% Vertical Split for Top/Bottom
+  const vSplit = 0.20;
 
   const getRect = (pos) => {
     if (pos === 'left') return { x: lx, y: 0, w: lw, h: visH };
@@ -375,7 +372,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   
   const positions = ['center', 'left', 'right', 'top', 'bottom'];
 
-  // LAYER 1: IMAGES (Background)
+  // LAYER 1: IMAGES
   for (const pos of positions) {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
@@ -442,7 +439,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     }
   }
 
-  // LAYER 2: CONTENT (Foreground)
+  // LAYER 2: CONTENT
   for (const pos of positions) {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) continue;
@@ -482,7 +479,8 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
        ctx.fillStyle = "#000000";
        ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
        ctx.textBaseline = "middle"; ctx.textAlign = "center";
-       ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2);
+       // Added +2px offset to center text vertically, matching main text tab behavior
+       ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2 + 2);
        ctx.restore();
     }
   }
