@@ -1,5 +1,5 @@
 <span class="badge-buymeacoffee">
-<a href="https://ko-fi.com/catdog58928" title="Donate to this project using Ko-Fi"><img src="https://img.shields.io/badge/Buy_me_coffee_and_biscuits-donate-yellow.svg?style=for-the-badge&logo=kofi" alt="Buy Me A Coffee donate button" /></a>
+<a href="https://ko-fi.com/catdog58928" title="Support this project using Ko-Fi"><img src="https://img.shields.io/badge/Buy_me_coffee_and_biscuits-support-yellow.svg?style=for-the-badge&logo=kofi" alt="Buy Me A Coffee  button" /></a>
 </span><br/> 
 
  
