@@ -1,29 +1,26 @@
-const CACHE_NAME = 'd30-pwa-v33';
+const CACHE_NAME = 'd30-pwa-v34';
 
-// List of core assets to try caching immediately
+// Explicit filenames without the ./ prefix to prevent cache-key mismatches
 const ASSETS = [
-  './',
-  './index.html',
-  './printer.js',
-  './ui.js',
-  './manifest.json',
-  './styles/tailwind.css',
-  './icons/icon-256.png',
-  './icons/icon-maskable.png',
-  './icons/icon-monochrome.png',
-  './libs/JsBarcode.all.min.js',
-  './libs/qrcode.min.js',
+  'index.html',
+  'printer.js',
+  'ui.js',
+  'manifest.json',
+  'styles/tailwind.css',
+  'icons/icon-256.png',
+  'icons/icon-maskable.png',
+  'icons/icon-monochrome.png',
+  'libs/JsBarcode.all.min.js',
+  'libs/qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/bwip-js@3.4.3/dist/bwip-js-min.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap'
 ];
 
 self.addEventListener('install', (e) => {
-  self.skipWaiting(); // Force the new SW to activate immediately
+  self.skipWaiting();
   
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Bulletproof Caching: Fetch files individually. 
-      // If one fails (e.g. a missing icon), it won't crash the whole offline system.
       return Promise.all(
         ASSETS.map((url) => {
           return fetch(url).then((response) => {
@@ -40,10 +37,8 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  // Claim control of all open windows immediately
   self.clients.claim();
   
-  // Cleanup old caches
   e.waitUntil(
     caches.keys().then((keyList) => {
       return Promise.all(keyList.map((key) => {
@@ -56,21 +51,29 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Only intercept GET requests
   if (e.request.method !== 'GET') return;
 
+  const url = new URL(e.request.url);
+  let requestToMatch = e.request;
+
+  // CRITICAL FIX: If Chrome requests the root folder OR specifically navigates, 
+  // FORCE it to look for the exact 'index.html' cache key.
+  if (url.origin === location.origin && (url.pathname === '/D30printerPWA/' || url.pathname === '/D30printerPWA')) {
+    requestToMatch = new Request('index.html');
+  } else if (e.request.mode === 'navigate') {
+    requestToMatch = new Request('index.html');
+  }
+
   e.respondWith(
-    // ignoreSearch: true prevents issues if Android adds ?utm_source=homescreen to the URL
-    caches.match(e.request, { ignoreSearch: true }).then((cachedResponse) => {
+    caches.match(requestToMatch, { ignoreSearch: true }).then((cachedResponse) => {
       
-      // 1. Serve from cache if we have it
+      // 1. Serve from cache
       if (cachedResponse) {
         return cachedResponse;
       }
 
-      // 2. If not in cache, fetch from network (Dynamic Caching)
+      // 2. Fetch from network and dynamically cache
       return fetch(e.request).then((networkResponse) => {
-        // If the fetch was successful, save a copy in the cache for next time we are offline
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -79,9 +82,9 @@ self.addEventListener('fetch', (e) => {
         }
         return networkResponse;
       }).catch((err) => {
-        // 3. Fallback: If offline and the network fails, and the user is trying to navigate to the app
-        if (e.request.mode === 'navigate') {
-          return caches.match('./index.html', { ignoreSearch: true });
+        // 3. Fallback for offline mode if all else fails
+        if (e.request.mode === 'navigate' || e.request.headers.get('accept').includes('text/html')) {
+          return caches.match('index.html', { ignoreSearch: true });
         }
         throw err;
       });
