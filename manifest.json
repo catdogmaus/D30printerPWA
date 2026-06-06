@@ -1,7 +1,7 @@
 {
   "name": "D30 Printer PWA",
   "short_name": "D30 Printer",
-  "start_url": "./",
+  "start_url": "index.html",
   "scope": "./",
   "display": "standalone",
   "theme_color": "#ffffff",
