@@ -218,7 +218,7 @@ export function renderImageCanvas(image, threshold=128, invert=false, labelWidth
      rctx.drawImage(image, -image.width/2, -image.height/2);
      srcImage = rotCanvas;
   }
-  let ratio = Math.min(canvas.width / srcImage.width, canvas.height / srcImage.height);
+  let ratio = Math.min(heightPx / srcImage.width, widthPx / srcImage.height);
   ratio *= (scalePct / 100);
   const dw = Math.floor(srcImage.width * ratio);
   const dh = Math.floor(srcImage.height * ratio);
@@ -368,11 +368,13 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   const mx = 16; 
   const my = 4;  
 
+  // BUGFIX: Passing rect to the drawFn so inner code can perfectly align the element to the actual unpadded edge
   const drawElement = async (pos, drawFn) => {
     const rect = getRect(pos);
     if (rect.w <= 0 || rect.h <= 0) return;
 
     let safeRect = { ...rect };
+    // Apply internal safety margins to prevent hardware printer cutoff at absolute edges
     if (Math.abs(safeRect.x) < 1) { safeRect.x += mx; safeRect.w -= mx; }
     if (Math.abs(safeRect.x + safeRect.w - visW) < 1) { safeRect.w -= mx; }
     if (Math.abs(safeRect.y) < 1) { safeRect.y += my; safeRect.h -= my; }
@@ -384,15 +386,16 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
       ctx.beginPath(); 
       ctx.rect(rect.x, rect.y, rect.w, rect.h); 
       ctx.clip(); 
-      await drawFn(safeRect);
+      await drawFn(safeRect, rect); // <--- FIXED: Passed rect here
     } finally {
       ctx.restore(); 
     }
   };
 
+  // LAYER 1: IMAGES
   for (const pos of positions) {
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
-        await drawElement(pos, async (safeRect) => {
+        await drawElement(pos, async (safeRect, boundingBox) => {
             let img = data.image.img;
             if (data.image.rotation !== 0) {
                  const rotCanvas = document.createElement('canvas');
@@ -451,19 +454,20 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
             
             let dx = safeRect.x + (safeRect.w - dw) / 2;
             let dy = safeRect.y + (safeRect.h - dh) / 2;
-            if (pos === 'left') dx = safeRect.x + safeRect.w - dw; 
-            else if (pos === 'right') dx = safeRect.x; 
-            else if (pos === 'top') dy = safeRect.y + safeRect.h - dh; 
-            else if (pos === 'bottom') dy = safeRect.y; 
+            if (pos === 'left') dx = boundingBox.x + boundingBox.w - dw; 
+            else if (pos === 'right') dx = boundingBox.x; 
+            else if (pos === 'top') dy = boundingBox.y + boundingBox.h - dh; 
+            else if (pos === 'bottom') dy = boundingBox.y; 
             
             ctx.drawImage(tCv, dx, dy);
         });
     }
   }
 
+  // LAYER 2: CONTENT
   for (const pos of positions) {
     if (data.barcode.enabled && data.barcode.pos === pos) {
-        await drawElement(pos, async (safeRect) => {
+        await drawElement(pos, async (safeRect, boundingBox) => {
             const bcCanvas = document.createElement('canvas');
             try {
                 JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, width: data.barcode.scale, margin:0 });
@@ -473,10 +477,10 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
                 
                 let dx = safeRect.x + (safeRect.w - dw) / 2;
                 let dy = safeRect.y + (safeRect.h - dh) / 2;
-                if (pos === 'left') dx = safeRect.x + safeRect.w - dw; 
-                else if (pos === 'right') dx = safeRect.x; 
-                else if (pos === 'top') dy = safeRect.y + safeRect.h - dh; 
-                else if (pos === 'bottom') dy = safeRect.y; 
+                if (pos === 'left') dx = boundingBox.x + boundingBox.w - dw; 
+                else if (pos === 'right') dx = boundingBox.x; 
+                else if (pos === 'top') dy = boundingBox.y + boundingBox.h - dh; 
+                else if (pos === 'bottom') dy = boundingBox.y; 
                 
                 ctx.drawImage(bcCanvas, dx, dy, dw, dh);
             } catch(e) {}
@@ -484,7 +488,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
     }
     
     if (data.qr.enabled && data.qr.pos === pos) {
-        await drawElement(pos, async (safeRect) => {
+        await drawElement(pos, async (safeRect, boundingBox) => {
             const qCanvas = document.createElement('canvas');
             if (data.qr.type === 'AZTEC') {
                  try { bwipjs.toCanvas(qCanvas, { bcid: 'azteccode', text: data.qr.val, scale: 4, includetext: false }); } catch(e){}
@@ -501,33 +505,33 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
             
             let dx = safeRect.x + (safeRect.w - dw) / 2;
             let dy = safeRect.y + (safeRect.h - dh) / 2;
-            if (pos === 'left') dx = safeRect.x + safeRect.w - dw; 
-            else if (pos === 'right') dx = safeRect.x; 
-            else if (pos === 'top') dy = safeRect.y + safeRect.h - dh; 
-            else if (pos === 'bottom') dy = safeRect.y; 
+            if (pos === 'left') dx = boundingBox.x + boundingBox.w - dw; 
+            else if (pos === 'right') dx = boundingBox.x; 
+            else if (pos === 'top') dy = boundingBox.y + boundingBox.h - dh; 
+            else if (pos === 'bottom') dy = boundingBox.y; 
             
             ctx.drawImage(qCanvas, dx, dy, dw, dh);
         });
     }
 
     if (data.text.enabled && data.text.pos === pos) {
-       await drawElement(pos, async (safeRect) => {
+       await drawElement(pos, async (safeRect, boundingBox) => {
            ctx.fillStyle = "#000000";
            ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
            
            let alignX, alignY;
            if (pos === 'left') {
-               ctx.textAlign = 'right'; alignX = safeRect.x + safeRect.w;
+               ctx.textAlign = 'right'; alignX = boundingBox.x + boundingBox.w;
                ctx.textBaseline = 'middle'; alignY = safeRect.y + safeRect.h/2 + 2;
            } else if (pos === 'right') {
-               ctx.textAlign = 'left'; alignX = safeRect.x;
+               ctx.textAlign = 'left'; alignX = boundingBox.x;
                ctx.textBaseline = 'middle'; alignY = safeRect.y + safeRect.h/2 + 2;
            } else if (pos === 'top') {
                ctx.textAlign = 'center'; alignX = safeRect.x + safeRect.w/2;
-               ctx.textBaseline = 'bottom'; alignY = safeRect.y + safeRect.h;
+               ctx.textBaseline = 'bottom'; alignY = boundingBox.y + boundingBox.h;
            } else if (pos === 'bottom') {
                ctx.textAlign = 'center'; alignX = safeRect.x + safeRect.w/2;
-               ctx.textBaseline = 'top'; alignY = safeRect.y;
+               ctx.textBaseline = 'top'; alignY = boundingBox.y;
            } else {
                ctx.textAlign = 'center'; alignX = safeRect.x + safeRect.w/2;
                ctx.textBaseline = 'middle'; alignY = safeRect.y + safeRect.h/2 + 2;

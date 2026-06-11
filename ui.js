@@ -13,7 +13,7 @@ import {
   detectLabel,
   makePreviewFromPrintCanvas,
   makeLabelCanvas
-} from './printer.js?v=47';
+} from './printer.js?v=50';
 
 function $(id){return document.getElementById(id);}
 function saveSetting(k,v){localStorage.setItem(k,JSON.stringify(v));}
@@ -187,6 +187,9 @@ function deletePreset() {
   }
 }
 
+let isDraggingGrid = false;
+let activeGridLine = null;
+
 function setupGridInteraction() {
   const startGridDrag = (e, line) => {
       isDraggingGrid = true;
@@ -291,6 +294,7 @@ function setActiveTab(name){
 function placePreviewCanvas(sourceCanvas){
   const wrap = $('previewCanvasWrap');
   const cv = $('mainPreviewCanvas');
+  const innerWrap = $('canvasInnerWrap');
   
   const availableW = wrap.clientWidth || (window.innerWidth - 40);
   const availableH = Math.min(500, window.innerHeight * 0.6);
@@ -298,6 +302,10 @@ function placePreviewCanvas(sourceCanvas){
   
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  cv.style.width = cv.width + 'px';
+  cv.style.height = cv.height + 'px';
+  innerWrap.style.width = cv.width + 'px';
+  innerWrap.style.height = cv.height + 'px';
   
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#fff'; 
@@ -463,19 +471,19 @@ function setup(){
     reader.onload = ()=>{
       const img = new Image(); img.onload = ()=>{
         imageRotation = 0; 
-        const labelW = Number($('labelWidth').value||printer.settings.labelWidthMM);
-        const labelH = Number($('labelLength').value||printer.settings.labelLengthMM);
-        const dpi = printer.settings.dpiPerMM || 8;
-        const widthPx = Math.round(labelW * dpi);
-        const heightPx = Math.round(labelH * dpi);
-        const bytesPerRow = Math.ceil(widthPx / 8);
-        const alignedW = bytesPerRow * 8;
-        const c = document.createElement('canvas'); c.width = alignedW; c.height = heightPx;
-        const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,c.width,c.height);
-        const ratio = Math.min(c.width / img.width, c.height / img.height);
-        ctx.drawImage(img, (c.width - img.width*ratio)/2, (c.height - img.height*ratio)/2, img.width*ratio, img.height*ratio);
+        
+        const maxDim = 800;
+        let iw = img.width; let ih = img.height;
+        if (iw > maxDim || ih > maxDim) {
+            const r = Math.min(maxDim/iw, maxDim/ih);
+            iw = Math.round(iw * r); ih = Math.round(ih * r);
+        }
+        
+        const c = document.createElement('canvas'); c.width = iw; c.height = ih;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,iw,ih);
+        ctx.drawImage(img, 0, 0, iw, ih);
+        
         $('imagePreview').dataset.canvas = c.toDataURL();
-        $('imagePreview').innerHTML = ''; $('imagePreview').appendChild(c);
         updatePreviewDebounced();
       };
       img.src = reader.result;
