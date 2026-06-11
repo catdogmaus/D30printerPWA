@@ -13,7 +13,7 @@ import {
   detectLabel,
   makePreviewFromPrintCanvas,
   makeLabelCanvas
-} from './printer.js';
+} from './printer.js?v=47';
 
 function $(id){return document.getElementById(id);}
 function saveSetting(k,v){localStorage.setItem(k,JSON.stringify(v));}
@@ -23,45 +23,38 @@ let previewTimer=null;
 const DEBOUNCE=160;
 let imageRotation = 0;
 
-// --- Custom Font Logic ---
+let currentTab = 'tab-text';
+let lastPreviewTab = 'tab-text';
+let combineLayout = { leftPct: 25, rightPct: 25, topPct: 20, bottomPct: 20 };
+
 async function handleCustomFont(ev) {
   const file = ev.target.files[0];
   if (!file) return;
-  
   const reader = new FileReader();
   reader.onload = async (e) => {
     try {
-      // Load font into browser
       const fontData = e.target.result;
-      const fontName = 'CustomFont_' + Date.now(); // Unique name
+      const fontName = 'CustomFont_' + Date.now(); 
       const fontFace = new FontFace(fontName, fontData);
       await fontFace.load();
       document.fonts.add(fontFace);
-      
-      // Update Dropdown
       const sel = $('fontFamily');
       const oldOpt = sel.querySelector('option[data-custom="true"]');
       if(oldOpt) oldOpt.remove();
-      
       const opt = document.createElement('option');
       opt.value = fontName;
       opt.textContent = 'Custom: ' + file.name;
       opt.selected = true;
       opt.dataset.custom = "true";
-      
       sel.insertBefore(opt, sel.lastElementChild);
-      
       saveSetting('fontFamily', fontName); 
       updatePreviewDebounced();
       alert('Custom font loaded!');
-    } catch(err) {
-      alert('Failed to load font: ' + err);
-    }
+    } catch(err) { alert('Failed: ' + err); }
   };
   reader.readAsArrayBuffer(file);
 }
 
-// --- Install Modal Logic ---
 function checkInstallState() {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const btn = $('installHelpBtn');
@@ -86,16 +79,13 @@ function setupModal() {
   window.onclick = (e) => { if (e.target === modal) close(); };
 }
 
-// --- Presets Logic ---
 function updatePresetSelect() {
   const sel = $('presetSelect');
   sel.innerHTML = '<option value="">Select a preset...</option>';
   const presets = loadSetting('userPresets', {});
   Object.keys(presets).forEach(k => {
     const opt = document.createElement('option');
-    opt.value = k;
-    opt.textContent = k;
-    sel.appendChild(opt);
+    opt.value = k; opt.textContent = k; sel.appendChild(opt);
   });
 }
 
@@ -111,7 +101,20 @@ function saveCurrentAsPreset() {
     fontFamily: $('fontFamily').value,
     alignment: $('alignment').value,
     fontBold: $('fontBold').checked,
-    frameStyle: $('frameStyle').value
+    frameStyle: $('frameStyle').value,
+    combineLayout: combineLayout,
+    mixText: $('mixText').checked,
+    mixTextSize: $('mixTextSize').value,
+    mixTextPos: $('mixTextPos').value,
+    mixImage: $('mixImage').checked,
+    mixImageScale: $('mixImageScale').value,
+    mixImagePos: $('mixImagePos').value,
+    mixBarcode: $('mixBarcode').checked,
+    mixBarcodeScale: $('mixBarcodeScale').value,
+    mixBarcodePos: $('mixBarcodePos').value,
+    mixQR: $('mixQR').checked,
+    mixQRSize: $('mixQRSize').value,
+    mixQRPos: $('mixQRPos').value
   };
   
   saveSetting('userPresets', presets);
@@ -126,21 +129,48 @@ function loadPreset(name) {
     if (p.labelWidth) $('labelWidth').value = p.labelWidth;
     if (p.labelLength) $('labelLength').value = p.labelLength;
     if (p.fontSize) $('fontSize').value = p.fontSize;
-    
     const sel = $('fontFamily');
     let fontExists = false;
-    for(let i=0; i<sel.options.length; i++) {
-        if(sel.options[i].value === p.fontFamily) fontExists = true;
-    }
+    for(let i=0; i<sel.options.length; i++) { if(sel.options[i].value === p.fontFamily) fontExists = true; }
     if (p.fontFamily && fontExists) $('fontFamily').value = p.fontFamily;
 
     if (p.alignment) $('alignment').value = p.alignment;
     if (p.frameStyle) $('frameStyle').value = p.frameStyle;
     if (p.fontBold !== undefined) $('fontBold').checked = p.fontBold;
     
+    if (p.combineLayout) {
+        combineLayout = p.combineLayout;
+        saveSetting('combineLayout', combineLayout);
+    }
+    const mixSettings = [
+      { id: 'mixText', val: p.mixText, type: 'checkbox' },
+      { id: 'mixTextSize', val: p.mixTextSize, type: 'input' },
+      { id: 'mixTextPos', val: p.mixTextPos, type: 'input' },
+      { id: 'mixImage', val: p.mixImage, type: 'checkbox' },
+      { id: 'mixImageScale', val: p.mixImageScale, type: 'input' },
+      { id: 'mixImagePos', val: p.mixImagePos, type: 'input' },
+      { id: 'mixBarcode', val: p.mixBarcode, type: 'checkbox' },
+      { id: 'mixBarcodeScale', val: p.mixBarcodeScale, type: 'input' },
+      { id: 'mixBarcodePos', val: p.mixBarcodePos, type: 'input' },
+      { id: 'mixQR', val: p.mixQR, type: 'checkbox' },
+      { id: 'mixQRSize', val: p.mixQRSize, type: 'input' },
+      { id: 'mixQRPos', val: p.mixQRPos, type: 'input' }
+    ];
+
+    mixSettings.forEach(s => {
+      const el = $(s.id);
+      if (el && s.val !== undefined) {
+        if (s.type === 'checkbox') el.checked = !!s.val;
+        else el.value = s.val;
+        saveSetting(s.id, s.val); 
+      }
+    });
+
     saveSetting('labelWidth', p.labelWidth);
     saveSetting('labelLength', p.labelLength);
     saveSetting('fontSize', p.fontSize);
+    
+    updateGridPositions();
     updatePreviewDebounced();
   }
 }
@@ -156,32 +186,141 @@ function deletePreset() {
     updatePresetSelect();
   }
 }
-// ---------------------
+
+function setupGridInteraction() {
+  const startGridDrag = (e, line) => {
+      isDraggingGrid = true;
+      activeGridLine = line;
+      if (e.cancelable) e.preventDefault(); 
+  };
+
+  const attach = (id, line) => {
+      const el = $(id);
+      if (el) {
+          el.addEventListener('mousedown', (e) => startGridDrag(e, line));
+          el.addEventListener('touchstart', (e) => startGridDrag(e, line), {passive: false});
+      }
+  };
+
+  attach('gl-left', 'left');
+  attach('gl-right', 'right');
+  attach('gl-top', 'top');
+  attach('gl-bottom', 'bottom');
+
+  const onGridMove = (e) => {
+      if (!isDraggingGrid) return;
+      const innerWrap = $('canvasInnerWrap');
+      const rect = innerWrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      if (activeGridLine === 'left') {
+          let pct = ((clientX - rect.left) / rect.width) * 100;
+          combineLayout.leftPct = Math.max(0, Math.min(100 - combineLayout.rightPct - 5, Math.round(pct)));
+      } else if (activeGridLine === 'right') {
+          let pct = ((rect.right - clientX) / rect.width) * 100;
+          combineLayout.rightPct = Math.max(0, Math.min(100 - combineLayout.leftPct - 5, Math.round(pct)));
+      } else if (activeGridLine === 'top') {
+          let pct = ((clientY - rect.top) / rect.height) * 100;
+          combineLayout.topPct = Math.max(0, Math.min(100 - combineLayout.bottomPct - 5, Math.round(pct)));
+      } else if (activeGridLine === 'bottom') {
+          let pct = ((rect.bottom - clientY) / rect.height) * 100;
+          combineLayout.bottomPct = Math.max(0, Math.min(100 - combineLayout.topPct - 5, Math.round(pct)));
+      }
+      
+      updateGridPositions();
+      updatePreviewDebounced();
+  };
+
+  const onGridEnd = () => {
+      if (isDraggingGrid) {
+          isDraggingGrid = false;
+          activeGridLine = null;
+          saveSetting('combineLayout', combineLayout);
+      }
+  };
+
+  window.addEventListener('mousemove', onGridMove);
+  window.addEventListener('touchmove', onGridMove, {passive: false});
+  window.addEventListener('mouseup', onGridEnd);
+  window.addEventListener('touchend', onGridEnd);
+  
+  $('resetLayoutBtn').addEventListener('click', () => {
+      combineLayout = { leftPct: 25, rightPct: 25, topPct: 20, bottomPct: 20 };
+      saveSetting('combineLayout', combineLayout);
+      updateGridPositions();
+      updatePreviewDebounced();
+  });
+}
+
+function updateGridPositions() {
+  $('gl-left').style.left = combineLayout.leftPct + '%';
+  $('gl-right').style.right = combineLayout.rightPct + '%';
+  $('gl-top').style.top = combineLayout.topPct + '%';
+  $('gl-bottom').style.bottom = combineLayout.bottomPct + '%';
+}
+
+function getUsedPositions() {
+  let used = { left: false, right: false, top: false, bottom: false };
+  ['mixText','mixImage','mixBarcode','mixQR'].forEach(id => {
+     if ($(id).checked) {
+         let p = $(id + 'Pos').value;
+         if (used[p] !== undefined) used[p] = true;
+     }
+  });
+  return used;
+}
 
 function setActiveTab(name){
   document.querySelectorAll('.tab-content').forEach(el=>el.style.display='none');
   const el=$(name); if(el) el.style.display='block';
   document.querySelectorAll('#tabBar .tab').forEach(t=>t.classList.remove('active'));
   const act=document.querySelector('#tabBar .tab[data-tab="'+name+'"]'); if(act) act.classList.add('active');
+  
+  currentTab = name;
   saveSetting('ui.selectedTab', name);
+  
+  if (['tab-text', 'tab-image', 'tab-barcode', 'tab-qr', 'tab-combine'].includes(name)) {
+      lastPreviewTab = name;
+      saveSetting('lastPreviewTab', name);
+  }
+  
   updatePreviewDebounced();
 }
 
 function placePreviewCanvas(sourceCanvas){
   const wrap = $('previewCanvasWrap');
-  wrap.innerHTML='';
+  const cv = $('mainPreviewCanvas');
+  
   const availableW = wrap.clientWidth || (window.innerWidth - 40);
   const availableH = Math.min(500, window.innerHeight * 0.6);
   const scale = Math.min(availableW / sourceCanvas.width, availableH / sourceCanvas.height, 1);
-  const cv = document.createElement('canvas');
+  
   cv.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   cv.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#fff'; 
   ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(sourceCanvas, 0, 0, cv.width, cv.height);
-  cv.className = 'preview-canvas';
-  wrap.appendChild(cv);
+  
+  const overlay = $('gridOverlay');
+  const resetBtn = $('resetLayoutBtn');
+  if (currentTab === 'tab-combine') {
+      overlay.style.display = 'block';
+      resetBtn.style.display = 'block';
+      
+      const used = getUsedPositions();
+      $('gl-left').style.display = used.left ? 'flex' : 'none';
+      $('gl-right').style.display = used.right ? 'flex' : 'none';
+      $('gl-top').style.display = used.top ? 'flex' : 'none';
+      $('gl-bottom').style.display = used.bottom ? 'flex' : 'none';
+
+      updateGridPositions();
+  } else {
+      overlay.style.display = 'none';
+      resetBtn.style.display = 'none';
+  }
 }
 
 function updatePreviewDebounced(){
@@ -190,9 +329,7 @@ function updatePreviewDebounced(){
 }
 
 async function updatePreview(){
-  const active = document.querySelectorAll('.tab-content');
-  let shown = 'tab-text';
-  for(const el of active){ if(el.style.display!='none'){ shown = el.id; break; } }
+  const shown = lastPreviewTab;
   const labelW = Number($('labelWidth').value || printer.settings.labelWidthMM || 12);
   const labelH = Number($('labelLength').value || printer.settings.labelLengthMM || 40);
   const dpi = printer.settings.dpiPerMM || 8;
@@ -235,51 +372,17 @@ async function updatePreview(){
       obj = await renderQRCanvas($('qrInput').value||'', ec, Number($('qrSize').value||70), labelW, labelH, dpi);
     } else if (shown === 'tab-combine') {
          const data = {
-            text: {
-                enabled: $('mixText').checked,
-                pos: $('mixTextPos').value,
-                val: $('textInput').value || $('textInput').placeholder,
-                fontSize: Number($('mixTextSize').value||36),
-                fontFamily: $('fontFamily').value,
-                bold: $('fontBold').checked
-            },
-            image: {
-                enabled: $('mixImage').checked,
-                pos: $('mixImagePos').value,
-                scalePct: Number($('mixImageScale').value||100),
-                // Grab visual settings from Image tab
-                threshold: Number($('imageThreshold').value||128),
-                dither: $('imageDither').checked,
-                invert: $('imageInvert').checked,
-                rotation: imageRotation, 
-                img: null
-            },
-            barcode: {
-                enabled: $('mixBarcode').checked,
-                pos: $('mixBarcodePos').value,
-                val: $('barcodeInput').value,
-                scale: Number($('mixBarcodeScale').value||2)
-            },
-            qr: {
-                enabled: $('mixQR').checked,
-                pos: $('mixQRPos').value,
-                val: $('qrInput').value,
-                size: Number($('mixQRSize').value||70),
-                type: $('qrEc').value // Pass type (L, M, AZTEC)
-            }
-        };
-        
-        if (data.image.enabled) {
+            layout: combineLayout,
+            text: { enabled: $('mixText').checked, pos: $('mixTextPos').value, val: $('textInput').value||$('textInput').placeholder, fontSize: Number($('mixTextSize').value||36), fontFamily: $('fontFamily').value, bold: $('fontBold').checked },
+            image: { enabled: $('mixImage').checked, pos: $('mixImagePos').value, scalePct: Number($('mixImageScale').value||100), threshold: Number($('imageThreshold').value||128), dither: $('imageDither').checked, invert: $('imageInvert').checked, rotation: imageRotation, img: null },
+            barcode: { enabled: $('mixBarcode').checked, pos: $('mixBarcodePos').value, val: $('barcodeInput').value, scale: Number($('mixBarcodeScale').value||2) },
+            qr: { enabled: $('mixQR').checked, pos: $('mixQRPos').value, val: $('qrInput').value, size: Number($('mixQRSize').value||70), type: $('qrEc').value }
+         };
+         if (data.image.enabled) {
             const cdata = $('imagePreview')?.dataset?.canvas;
-            if (cdata) {
-                const img = new Image();
-                img.src = cdata;
-                await new Promise(r => img.onload = r);
-                data.image.img = img;
-            }
-        }
-        
-        obj = await renderCombinedCanvas(data, labelW, labelH, dpi);
+            if (cdata) { const img = new Image(); img.src = cdata; await new Promise(r=>img.onload=r); data.image.img = img; }
+         }
+         obj = await renderCombinedCanvas(data, labelW, labelH, dpi);
     }
     
     if(obj && obj.canvas){
@@ -302,8 +405,11 @@ function wireSimple(id, key, transform = v=>v){
 }
 
 function setup(){
+  lastPreviewTab = loadSetting('lastPreviewTab', 'tab-text');
+  const savedTab = loadSetting('ui.selectedTab', 'tab-text');
+  
   document.querySelectorAll('#tabBar .tab').forEach(t=> t.addEventListener('click', ()=> setActiveTab(t.dataset.tab)));
-  const lastTab = loadSetting('ui.selectedTab', 'tab-text'); setActiveTab(lastTab);
+  setActiveTab(savedTab);
   
   $('connectBtn').addEventListener('click', async ()=> { 
     if(!printer.connected) {
@@ -321,6 +427,9 @@ function setup(){
     }
     updatePreviewDebounced(); 
   });
+
+  const savedLayout = loadSetting('combineLayout', null);
+  if(savedLayout) combineLayout = savedLayout;
 
   ['labelWidth','labelLength','fontSize','alignment','barcodeScale','qrSize','imageThreshold','imageScale','barcodeType','protocolSelect','fontFamily','fontPreset','copiesInput','frameStyle','qrEc',
    'mixTextPos','mixImagePos','mixBarcodePos','mixQRPos',
@@ -385,8 +494,7 @@ function setup(){
 
   $('fab-print').addEventListener('click', async ()=>{
     try{
-      const active = document.querySelectorAll('.tab-content'); let shown = 'tab-text';
-      for(const el of active){ if(el.style.display!='none'){ shown = el.id; break; } }
+      const shown = lastPreviewTab;
       const labelW = Number($('labelWidth').value||printer.settings.labelWidthMM);
       const labelH = Number($('labelLength').value||printer.settings.labelLengthMM);
       const dpi = printer.settings.dpiPerMM || 8;
@@ -394,9 +502,9 @@ function setup(){
       
       let obj = null;
       if (shown === 'tab-text') {
-         const text = $('textInput').value || $('textInput').placeholder;
+         const textToPrint = $('textInput').value || $('textInput').placeholder;
          const fs = Number($('fontSize').value||36);
-         obj = renderTextCanvas(text, fs, $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily').value, $('frameStyle').value);
+         obj = renderTextCanvas(textToPrint, fs, $('alignment').value, $('invertInput').checked, labelW, labelH, dpi, $('fontFamily').value, $('frameStyle').value);
       } else if (shown === 'tab-image') {
          const cdata = $('imagePreview')?.dataset?.canvas;
          if(!cdata) return alert('No image');
@@ -410,6 +518,7 @@ function setup(){
          obj = await renderQRCanvas($('qrInput').value||'', ec, Number($('qrSize').value||70), labelW, labelH, dpi);
       } else if (shown === 'tab-combine') {
          const data = {
+            layout: combineLayout,
             text: { enabled: $('mixText').checked, pos: $('mixTextPos').value, val: $('textInput').value||$('textInput').placeholder, fontSize: Number($('mixTextSize').value||36), fontFamily: $('fontFamily').value, bold: $('fontBold').checked },
             image: { enabled: $('mixImage').checked, pos: $('mixImagePos').value, scalePct: Number($('mixImageScale').value||100), threshold: Number($('imageThreshold').value||128), dither: $('imageDither').checked, invert: $('imageInvert').checked, rotation: imageRotation, img: null },
             barcode: { enabled: $('mixBarcode').checked, pos: $('mixBarcodePos').value, val: $('barcodeInput').value, scale: Number($('mixBarcodeScale').value||2) },
@@ -422,7 +531,10 @@ function setup(){
          obj = await renderCombinedCanvas(data, labelW, labelH, dpi);
       }
 
-      if (obj) await printCanvasObject(obj, copies, (shown==='tab-image' || shown==='tab-combine') ? false : $('invertInput').checked);
+      if (obj) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await printCanvasObject(obj, copies, (shown==='tab-image' || shown==='tab-combine') ? false : $('invertInput').checked);
+      }
       
     }catch(e){ alert('Print failed: ' + e); console.error(e); }
   });
@@ -434,6 +546,8 @@ function setup(){
   
   setupModal();
   checkInstallState();
+  setupGridInteraction();
+  
   updatePreviewDebounced();
 }
 

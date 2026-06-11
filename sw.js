@@ -1,4 +1,4 @@
-const CACHE_NAME = 'd30-pwa-v35';
+const CACHE_NAME = 'd30-pwa-v36';
 
 // ONLY cache local, guaranteed files during the install phase.
 // External CDNs (fonts, bwip-js) are removed from here to prevent CORS failures blocking the install.

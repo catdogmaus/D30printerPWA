@@ -54,10 +54,39 @@
       border-radius: 16px;
       border: 1px solid var(--glass-border);
       box-shadow: var(--glass-shadow);
+      position: relative; 
+      overflow: hidden; 
     }
 
-    #previewCanvasWrap { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 120px; }
-    .preview-canvas { display: block; width: auto; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: white; }
+    #previewCanvasWrap { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 120px; position: relative; z-index: 1; }
+    
+    #canvasInnerWrap {
+        position: relative;
+        display: inline-block;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        background: white;
+    }
+    .preview-canvas { display: block; width: 100%; height: auto; border-radius: 8px; }
+
+    .grid-overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none; z-index: 10;
+    }
+    .grid-line { position: absolute; pointer-events: auto; }
+    
+    .grid-line-v { top: -2000px; bottom: -2000px; width: 40px; cursor: ew-resize; display: flex; justify-content: center; }
+    .grid-line-v::after { content: ''; width: 1px; height: 100%; background: rgba(245, 158, 11, 0.8); transition: background 0.2s, width 0.1s; }
+    .grid-line-v:hover::after, .grid-line-v:active::after { background: rgba(217, 119, 6, 1); box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); width: 2px; }
+    
+    .grid-line-h { left: -2000px; right: -2000px; height: 40px; cursor: ns-resize; display: flex; align-items: center; }
+    .grid-line-h::after { content: ''; height: 1px; width: 100%; background: rgba(245, 158, 11, 0.8); transition: background 0.2s, height 0.1s; }
+    .grid-line-h:hover::after, .grid-line-h:active::after { background: rgba(217, 119, 6, 1); box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); height: 2px; }
+
+    #gl-left { margin-left: -20px; }
+    #gl-right { margin-right: -20px; }
+    #gl-top { margin-top: -20px; }
+    #gl-bottom { margin-bottom: -20px; }
 
     .tab-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 1rem; flex-wrap: wrap; gap: 12px; }
     .tabs { display: flex; gap: 0.6rem; flex-wrap: wrap; }
@@ -92,17 +121,8 @@
     @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
     .code-box { background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #334155; }
     
-    /* Mixer Grid Layout */
-    .mixer-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-    @media (min-width: 640px) {
-      .mixer-grid {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
+    .mixer-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 640px) { .mixer-grid { grid-template-columns: 1fr 1fr; } }
     .mixer-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.4); border-radius: 8px; border: 1px solid var(--glass-border); }
     .mixer-label { font-weight: 500; flex: 1; display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
     .mixer-input-sm { width: 70px; text-align: center; padding: 0.5rem; font-size: 0.9rem; }
@@ -135,8 +155,21 @@
 
   <main class="container">
     <div id="previewRoot" style="margin:20px 0 12px;">
-      <div class="card" style="padding:24px; background: var(--glass-bg);">
-        <div id="previewCanvasWrap"></div>
+      <div class="card" style="padding:24px; min-height: 220px; display:flex; flex-direction:column; justify-content:center;">
+        
+        <button id="resetLayoutBtn" class="btn" style="position:absolute; bottom:12px; left:12px; display:none; padding:6px 12px; font-size:0.8rem; background:rgba(255,255,255,0.9); color:var(--text-muted); border:1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 20;">Reset Grid</button>
+
+        <div id="previewCanvasWrap">
+            <div id="canvasInnerWrap">
+                <canvas id="mainPreviewCanvas" class="preview-canvas"></canvas>
+                <div id="gridOverlay" class="grid-overlay" style="display:none;">
+                    <div id="gl-left" class="grid-line grid-line-v"></div>
+                    <div id="gl-right" class="grid-line grid-line-v"></div>
+                    <div id="gl-top" class="grid-line grid-line-h"></div>
+                    <div id="gl-bottom" class="grid-line grid-line-h"></div>
+                </div>
+            </div>
+        </div>
       </div>
       <div id="previewHint" class="small" style="margin-top:12px; text-align:center; opacity:0.8;">Preview shown in label proportions.</div>
     </div>
@@ -313,11 +346,10 @@
       <div id="tab-combine" class="tab-content" style="display:none;">
         <h4 class="small" style="margin-bottom:12px; font-weight:600;">Layer Mixer</h4>
         <div style="font-size:0.85rem; color:#64748b; margin-bottom:12px;">
-          Elements priority: Left/Right push Top/Bottom and Center. Center fills remaining space.
+          Elements priority: Left/Right push Top/Bottom and Center. Drag orange grid lines in preview to resize zones.
         </div>
 
         <div class="mixer-grid">
-          <!-- Text -->
           <div class="mixer-row">
             <label class="mixer-label" style="cursor:pointer">
               <input type="checkbox" id="mixText" checked> <span>Text</span>
@@ -332,7 +364,6 @@
             </select>
           </div>
 
-          <!-- Image -->
           <div class="mixer-row">
             <label class="mixer-label" style="cursor:pointer">
               <input type="checkbox" id="mixImage"> <span>Image</span>
@@ -347,12 +378,10 @@
             </select>
           </div>
 
-          <!-- Barcode -->
           <div class="mixer-row">
             <label class="mixer-label" style="cursor:pointer">
               <input type="checkbox" id="mixBarcode"> <span>Barcode</span>
             </label>
-            <!-- Default scale updated to 9 -->
             <input id="mixBarcodeScale" type="number" value="9" class="mixer-input-sm" title="Scale" />
             <select id="mixBarcodePos" class="mixer-select">
               <option value="center">Center</option>
@@ -363,7 +392,6 @@
             </select>
           </div>
 
-          <!-- QR -->
           <div class="mixer-row">
             <label class="mixer-label" style="cursor:pointer">
               <input type="checkbox" id="mixQR"> <span>QR/Aztec</span>
@@ -371,8 +399,8 @@
             <input id="mixQRSize" type="number" value="70" class="mixer-input-sm" title="Size px" />
             <select id="mixQRPos" class="mixer-select">
               <option value="center">Center</option>
-              <option value="left" selected>Left</option>
-              <option value="right">Right</option>
+              <option value="left">Left</option>
+              <option value="right" selected>Right</option>
               <option value="top">Top</option>
               <option value="bottom">Bottom</option>
             </select>
@@ -486,7 +514,7 @@
       .catch(err => console.log('SW failed', err));
     }
   </script>
-  <script type="module" src="printer.js"></script>
-  <script type="module" src="ui.js"></script>
+  <script type="module" src="printer.js?v=47"></script>
+  <script type="module" src="ui.js?v=47"></script>
 </body>
 </html>
