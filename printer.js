@@ -126,7 +126,7 @@ export function makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, invert=false) 
   const canvas = document.createElement('canvas');
   canvas.width = alignedWidth;
   canvas.height = heightPx;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d');
   ctx.fillStyle = invert ? "#000000" : "#FFFFFF";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   return { canvas, ctx, bytesPerRow, widthPx: alignedWidth, heightPx };
@@ -320,58 +320,44 @@ export async function renderQRCanvas(value, typeOrSize='M', size=70, labelWidthM
   return { canvas, bytesPerRow, widthPx, heightPx };
 }
 
-// --- Updated Combined Logic ---
 export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dpi) {
   const { canvas, ctx, bytesPerRow, widthPx, heightPx } = makeLabelCanvas(labelWidthMM, labelLengthMM, dpi, false);
   
-  const mx = 16; 
-  const visW = heightPx - (2*mx); 
+  const visW = heightPx; 
   const visH = widthPx; 
   
-  const slots = { left: false, right: false };
+  const slots = { left: false, right: false, top: false, bottom: false };
   ['text','image','barcode','qr'].forEach(k => {
       if (data[k].enabled) {
           if (data[k].pos === 'left') slots.left = true;
           if (data[k].pos === 'right') slots.right = true;
+          if (data[k].pos === 'top') slots.top = true;
+          if (data[k].pos === 'bottom') slots.bottom = true;
       }
   });
 
-  const lx = mx; 
-  const lw = slots.left ? visW * 0.25 : 0;
-  const rw = slots.right ? visW * 0.25 : 0;
-  const rx = mx + visW - rw;
-  
-  const sx = lx + lw;
-  const sw = visW - lw - rw;
-  
-  // 20% Vertical Split for Top/Bottom
-  const vSplit = 0.20;
+  const lPct = (data.layout ? data.layout.leftPct : 25) / 100;
+  const rPct = (data.layout ? data.layout.rightPct : 25) / 100;
+  const tPct = (data.layout ? data.layout.topPct : 20) / 100;
+  const bPct = (data.layout ? data.layout.bottomPct : 20) / 100;
 
   const getRect = (pos) => {
-    if (pos === 'left') return { x: lx, y: 0, w: lw, h: visH };
-    if (pos === 'right') return { x: rx, y: 0, w: rw, h: visH };
-    
-    if (pos === 'top')    return { x: sx, y: 0, w: sw, h: visH * vSplit };
-    if (pos === 'bottom') return { x: sx, y: visH * (1 - vSplit), w: sw, h: visH * vSplit };
-    
-    let topUsed = false; let botUsed = false;
-    ['text','image','barcode','qr'].forEach(k => {
-        if (data[k].enabled) {
-            if (data[k].pos === 'top') topUsed = true;
-            if (data[k].pos === 'bottom') botUsed = true;
+    let x=0, y=0, w=0, h=0;
+    if (pos === 'left') { x = 0; y = 0; w = visW * lPct; h = visH; }
+    else if (pos === 'right') { x = visW * (1 - rPct); y = 0; w = visW * rPct; h = visH; }
+    else {
+        x = slots.left ? visW * lPct : 0;
+        w = visW - x - (slots.right ? visW * rPct : 0);
+        if (pos === 'top') { y = 0; h = visH * tPct; }
+        else if (pos === 'bottom') { y = visH * (1 - bPct); h = visH * bPct; }
+        else if (pos === 'center') {
+            y = slots.top ? visH * tPct : 0;
+            let ch = visH - y - (slots.bottom ? visH * bPct : 0);
+            if (slots.bottom) ch += visH * 0.05; 
+            h = ch;
         }
-    });
-    
-    const cy = topUsed ? visH * vSplit : 0;
-    // Original Center Height calculation
-    let ch = visH - (topUsed ? visH*vSplit : 0) - (botUsed ? visH*vSplit : 0);
-    
-    // FIX: If Bottom is used, expand center height by 5% downwards
-    // This reduces the visual gap without changing the Bottom element's rect.
-    if (botUsed) ch += visH * 0.05;
-
-    if (pos === 'center') return { x: sx, y: cy, w: sw, h: ch };
-    return { x: 0, y: 0, w: 0, h: 0 };
+    }
+    return { x, y, w, h };
   };
 
   ctx.save();
@@ -379,117 +365,175 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
   ctx.rotate(-Math.PI / 2);
   
   const positions = ['center', 'left', 'right', 'top', 'bottom'];
+  const mx = 16; 
+  const my = 4;  
 
-  // LAYER 1: IMAGES
-  for (const pos of positions) {
+  const drawElement = async (pos, drawFn) => {
     const rect = getRect(pos);
-    if (rect.w <= 0 || rect.h <= 0) continue;
+    if (rect.w <= 0 || rect.h <= 0) return;
 
+    let safeRect = { ...rect };
+    if (Math.abs(safeRect.x) < 1) { safeRect.x += mx; safeRect.w -= mx; }
+    if (Math.abs(safeRect.x + safeRect.w - visW) < 1) { safeRect.w -= mx; }
+    if (Math.abs(safeRect.y) < 1) { safeRect.y += my; safeRect.h -= my; }
+    if (Math.abs(safeRect.y + safeRect.h - visH) < 1) { safeRect.h -= my; }
+    if (safeRect.w <= 0 || safeRect.h <= 0) return;
+
+    ctx.save();
+    try {
+      ctx.beginPath(); 
+      ctx.rect(rect.x, rect.y, rect.w, rect.h); 
+      ctx.clip(); 
+      await drawFn(safeRect);
+    } finally {
+      ctx.restore(); 
+    }
+  };
+
+  for (const pos of positions) {
     if (data.image.enabled && data.image.pos === pos && data.image.img) {
-        let img = data.image.img;
-        if (data.image.rotation !== 0) {
-             const rotCanvas = document.createElement('canvas');
-             if (data.image.rotation % 180 !== 0) { rotCanvas.width = img.height; rotCanvas.height = img.width; } 
-             else { rotCanvas.width = img.width; rotCanvas.height = img.height; }
-             const rctx = rotCanvas.getContext('2d');
-             rctx.translate(rotCanvas.width/2, rotCanvas.height/2);
-             rctx.rotate(data.image.rotation * Math.PI / 180);
-             rctx.drawImage(img, -img.width/2, -img.height/2);
-             img = rotCanvas;
-        }
-
-        let ratio = Math.min(rect.w / img.width, rect.h / img.height);
-        ratio *= (data.image.scalePct / 100);
-        const dw = Math.floor(img.width * ratio);
-        const dh = Math.floor(img.height * ratio);
-        
-        const tCv = document.createElement('canvas');
-        tCv.width = dw; tCv.height = dh;
-        const tCtx = tCv.getContext('2d');
-        tCtx.drawImage(img, 0, 0, dw, dh);
-        const iData = tCtx.getImageData(0, 0, dw, dh);
-        const dd = iData.data;
-        
-        if (data.image.dither) {
-            for (let i=0; i<dd.length; i+=4) {
-                const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
-                dd[i]=dd[i+1]=dd[i+2]=g;
+        await drawElement(pos, async (safeRect) => {
+            let img = data.image.img;
+            if (data.image.rotation !== 0) {
+                 const rotCanvas = document.createElement('canvas');
+                 if (data.image.rotation % 180 !== 0) { rotCanvas.width = img.height; rotCanvas.height = img.width; } 
+                 else { rotCanvas.width = img.width; rotCanvas.height = img.height; }
+                 const rctx = rotCanvas.getContext('2d');
+                 rctx.translate(rotCanvas.width/2, rotCanvas.height/2);
+                 rctx.rotate(data.image.rotation * Math.PI / 180);
+                 rctx.drawImage(img, -img.width/2, -img.height/2);
+                 img = rotCanvas;
             }
-            for(let y=0; y<dh; y++){
-                for(let x=0; x<dw; x++){
-                    const i = (y*dw + x)*4; const oldP = dd[i];
-                    const newP = oldP < 128 ? 0 : 255;
-                    dd[i]=dd[i+1]=dd[i+2]=newP;
-                    const err = oldP - newP;
-                    if(x+1<dw) dd[((y*dw+x+1)*4)] += err*7/16;
-                    if(x-1>=0 && y+1<dh) dd[(((y+1)*dw+x-1)*4)] += err*3/16;
-                    if(y+1<dh) dd[(((y+1)*dw+x)*4)] += err*5/16;
-                    if(x+1<dw && y+1<dh) dd[(((y+1)*dw+x+1)*4)] += err*1/16;
+
+            let ratio = Math.min(safeRect.w / img.width, safeRect.h / img.height);
+            ratio *= (data.image.scalePct / 100);
+            const dw = Math.floor(img.width * ratio);
+            const dh = Math.floor(img.height * ratio);
+            
+            const tCv = document.createElement('canvas');
+            tCv.width = dw; tCv.height = dh;
+            const tCtx = tCv.getContext('2d');
+            tCtx.drawImage(img, 0, 0, dw, dh);
+            const iData = tCtx.getImageData(0, 0, dw, dh);
+            const dd = iData.data;
+            
+            if (data.image.dither) {
+                for (let i=0; i<dd.length; i+=4) {
+                    const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
+                    dd[i]=dd[i+1]=dd[i+2]=g;
+                }
+                for(let y=0; y<dh; y++){
+                    for(let x=0; x<dw; x++){
+                        const i = (y*dw + x)*4; const oldP = dd[i];
+                        const newP = oldP < 128 ? 0 : 255;
+                        dd[i]=dd[i+1]=dd[i+2]=newP;
+                        const err = oldP - newP;
+                        if(x+1<dw) dd[((y*dw+x+1)*4)] += err*7/16;
+                        if(x-1>=0 && y+1<dh) dd[(((y+1)*dw+x-1)*4)] += err*3/16;
+                        if(y+1<dh) dd[(((y+1)*dw+x)*4)] += err*5/16;
+                        if(x+1<dw && y+1<dh) dd[(((y+1)*dw+x+1)*4)] += err*1/16;
+                    }
+                }
+            } else {
+                for(let i=0; i<dd.length; i+=4) {
+                    const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
+                    const v = g < data.image.threshold ? 0 : 255;
+                    dd[i]=dd[i+1]=dd[i+2]=v;
                 }
             }
-        } else {
-            for(let i=0; i<dd.length; i+=4) {
-                const g = 0.299*dd[i] + 0.587*dd[i+1] + 0.114*dd[i+2];
-                const v = g < data.image.threshold ? 0 : 255;
-                dd[i]=dd[i+1]=dd[i+2]=v;
+            if (data.image.invert) {
+                for(let i=0; i<dd.length; i+=4) {
+                    const v = dd[i] === 0 ? 255 : 0;
+                    dd[i]=dd[i+1]=dd[i+2]=v;
+                }
             }
-        }
-        
-        if (data.image.invert) {
-            for(let i=0; i<dd.length; i+=4) {
-                const v = dd[i] === 0 ? 255 : 0;
-                dd[i]=dd[i+1]=dd[i+2]=v;
-            }
-        }
-        tCtx.putImageData(iData, 0, 0);
-        
-        ctx.drawImage(tCv, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2);
+            tCtx.putImageData(iData, 0, 0);
+            
+            let dx = safeRect.x + (safeRect.w - dw) / 2;
+            let dy = safeRect.y + (safeRect.h - dh) / 2;
+            if (pos === 'left') dx = safeRect.x + safeRect.w - dw; 
+            else if (pos === 'right') dx = safeRect.x; 
+            else if (pos === 'top') dy = safeRect.y + safeRect.h - dh; 
+            else if (pos === 'bottom') dy = safeRect.y; 
+            
+            ctx.drawImage(tCv, dx, dy);
+        });
     }
   }
 
-  // LAYER 2: CONTENT
   for (const pos of positions) {
-    const rect = getRect(pos);
-    if (rect.w <= 0 || rect.h <= 0) continue;
-
     if (data.barcode.enabled && data.barcode.pos === pos) {
-        const bcCanvas = document.createElement('canvas');
-        try {
-            JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, width: data.barcode.scale, margin:0 });
-            const ratio = Math.min(rect.w / bcCanvas.width, rect.h / bcCanvas.height);
-            const dw = bcCanvas.width * ratio;
-            const dh = bcCanvas.height * ratio;
-            ctx.drawImage(bcCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
-        } catch(e) {}
+        await drawElement(pos, async (safeRect) => {
+            const bcCanvas = document.createElement('canvas');
+            try {
+                JsBarcode(bcCanvas, data.barcode.val, { format: 'CODE128', displayValue: false, width: data.barcode.scale, margin:0 });
+                const ratio = Math.min(safeRect.w / bcCanvas.width, safeRect.h / bcCanvas.height);
+                const dw = bcCanvas.width * ratio;
+                const dh = bcCanvas.height * ratio;
+                
+                let dx = safeRect.x + (safeRect.w - dw) / 2;
+                let dy = safeRect.y + (safeRect.h - dh) / 2;
+                if (pos === 'left') dx = safeRect.x + safeRect.w - dw; 
+                else if (pos === 'right') dx = safeRect.x; 
+                else if (pos === 'top') dy = safeRect.y + safeRect.h - dh; 
+                else if (pos === 'bottom') dy = safeRect.y; 
+                
+                ctx.drawImage(bcCanvas, dx, dy, dw, dh);
+            } catch(e) {}
+        });
     }
     
     if (data.qr.enabled && data.qr.pos === pos) {
-        const qCanvas = document.createElement('canvas');
-        if (data.qr.type === 'AZTEC') {
-             try { bwipjs.toCanvas(qCanvas, { bcid: 'azteccode', text: data.qr.val, scale: 4, includetext: false }); } catch(e){}
-        } else {
-             await QRCode.toCanvas(qCanvas, data.qr.val, { errorCorrectionLevel: data.qr.type, margin: 0 });
-        }
-        
-        const targetSize = data.qr.size;
-        const fitScale = Math.min(rect.w / qCanvas.width, rect.h / qCanvas.height);
-        const reqScale = targetSize / qCanvas.width;
-        const scale = Math.min(fitScale, reqScale);
-        
-        const dw = qCanvas.width * scale;
-        const dh = qCanvas.height * scale;
-        ctx.drawImage(qCanvas, rect.x + (rect.w - dw)/2, rect.y + (rect.h - dh)/2, dw, dh);
+        await drawElement(pos, async (safeRect) => {
+            const qCanvas = document.createElement('canvas');
+            if (data.qr.type === 'AZTEC') {
+                 try { bwipjs.toCanvas(qCanvas, { bcid: 'azteccode', text: data.qr.val, scale: 4, includetext: false }); } catch(e){}
+            } else {
+                 await QRCode.toCanvas(qCanvas, data.qr.val, { errorCorrectionLevel: data.qr.type, margin: 0 });
+            }
+            
+            const fitScale = Math.min(safeRect.w / qCanvas.width, safeRect.h / qCanvas.height);
+            const reqScale = data.qr.size / qCanvas.width;
+            const scale = Math.min(fitScale, reqScale);
+            
+            const dw = qCanvas.width * scale;
+            const dh = qCanvas.height * scale;
+            
+            let dx = safeRect.x + (safeRect.w - dw) / 2;
+            let dy = safeRect.y + (safeRect.h - dh) / 2;
+            if (pos === 'left') dx = safeRect.x + safeRect.w - dw; 
+            else if (pos === 'right') dx = safeRect.x; 
+            else if (pos === 'top') dy = safeRect.y + safeRect.h - dh; 
+            else if (pos === 'bottom') dy = safeRect.y; 
+            
+            ctx.drawImage(qCanvas, dx, dy, dw, dh);
+        });
     }
 
     if (data.text.enabled && data.text.pos === pos) {
-       ctx.save();
-       ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
-       ctx.fillStyle = "#000000";
-       ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
-       ctx.textBaseline = "middle"; ctx.textAlign = "center";
-       // Added +2px offset
-       ctx.fillText(data.text.val, rect.x + rect.w/2, rect.y + rect.h/2 + 2);
-       ctx.restore();
+       await drawElement(pos, async (safeRect) => {
+           ctx.fillStyle = "#000000";
+           ctx.font = `${data.text.bold?'bold ':''}${data.text.fontSize}px ${data.text.fontFamily}`;
+           
+           let alignX, alignY;
+           if (pos === 'left') {
+               ctx.textAlign = 'right'; alignX = safeRect.x + safeRect.w;
+               ctx.textBaseline = 'middle'; alignY = safeRect.y + safeRect.h/2 + 2;
+           } else if (pos === 'right') {
+               ctx.textAlign = 'left'; alignX = safeRect.x;
+               ctx.textBaseline = 'middle'; alignY = safeRect.y + safeRect.h/2 + 2;
+           } else if (pos === 'top') {
+               ctx.textAlign = 'center'; alignX = safeRect.x + safeRect.w/2;
+               ctx.textBaseline = 'bottom'; alignY = safeRect.y + safeRect.h;
+           } else if (pos === 'bottom') {
+               ctx.textAlign = 'center'; alignX = safeRect.x + safeRect.w/2;
+               ctx.textBaseline = 'top'; alignY = safeRect.y;
+           } else {
+               ctx.textAlign = 'center'; alignX = safeRect.x + safeRect.w/2;
+               ctx.textBaseline = 'middle'; alignY = safeRect.y + safeRect.h/2 + 2;
+           }
+           ctx.fillText(data.text.val, alignX, alignY);
+       });
     }
   }
 
@@ -498,7 +542,7 @@ export async function renderCombinedCanvas(data, labelWidthMM, labelLengthMM, dp
 }
 
 export function canvasToBitmap(canvas, bytesPerRow, invert=false) {
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
   const img = ctx.getImageData(0, 0, w, h).data;
